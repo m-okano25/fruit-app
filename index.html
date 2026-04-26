@@ -933,7 +933,7 @@
       手動で同期することもできます。別の端末でデータを変更した場合は「データを取得」で最新データを読み込んでください。
     </p>
     <div class="btn-group">
-      <button class="btn btn-primary" onclick="syncToCloud()">☁️ クラウドへ保存</button>
+      <button class="btn btn-primary" onclick="syncToCloud(true)">☁️ クラウドへ保存</button>
       <button class="btn btn-secondary" onclick="loadFromCloud()">📥 データを取得（上書き）</button>
     </div>
     <p style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">
@@ -1097,16 +1097,17 @@ let dashFrom = null, dashTo = null;
 let filteredSales = [];
 let chartProduct = null, chartMonthly = null;
 var gasUrl       = localStorage.getItem('fruits_gasUrl') || '';
+var cloudSynced  = false; // GASからデータ取得済みフラグ（未取得時はプッシュしない）
 let shippingRates = JSON.parse(localStorage.getItem('fruits_shippingRates') || '[]');
 function saveShippingRates() { localStorage.setItem('fruits_shippingRates', JSON.stringify(shippingRates)); }
 
 function saveProducts() {
   localStorage.setItem('fruits_products', JSON.stringify(products));
-  if (gasUrl) syncToCloud();
+  if (gasUrl && cloudSynced) syncToCloud();
 }
 function saveSales() {
   localStorage.setItem('fruits_sales', JSON.stringify(sales));
-  if (gasUrl) syncToCloud();
+  if (gasUrl && cloudSynced) syncToCloud();
 }
 
 // ===== TABS =====
@@ -1173,8 +1174,9 @@ function clearGasUrl() {
   renderSettingsStatus();
 }
 
-async function syncToCloud() {
+async function syncToCloud(force) {
   if (!gasUrl) return;
+  if (!force && !cloudSynced) return;
   setSyncStatus('syncing', '同期中...');
   try {
     const payload = JSON.stringify({ sales, products, inventory, stockHistory });
@@ -1211,9 +1213,11 @@ async function loadFromCloud() {
       products     = data.products     && data.products.length > 0     ? data.products     : products;
       inventory    = data.inventory    && data.inventory.length > 0    ? data.inventory    : inventory;
       stockHistory = data.stockHistory && data.stockHistory.length > 0 ? data.stockHistory : stockHistory;
-      saveSales();
-      saveProducts();
-      saveInventory();
+      localStorage.setItem('fruits_sales',        JSON.stringify(sales));
+      localStorage.setItem('fruits_products',     JSON.stringify(products));
+      localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
+      localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
+      cloudSynced = true;
       populateProductSelect();
       renderDashboard();
       renderList();
@@ -2094,7 +2098,7 @@ let stockHistory = JSON.parse(localStorage.getItem('fruits_stockHistory') || '[]
 function saveInventory() {
   localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
   localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
-  if (gasUrl) syncToCloud();
+  if (gasUrl && cloudSynced) syncToCloud();
 }
 
 function getShopChip(shop) {
@@ -2453,9 +2457,26 @@ window.addEventListener('DOMContentLoaded', () => {
   renderDashboard();
   renderMaster();
 
-  // GAS URL が設定済みならステータス表示
+  // GAS URL が設定済みなら起動時に自動取得（cloudSyncedをtrueにする）
   if (gasUrl) {
-    setSyncStatus('success', '同期設定済み');
+    setSyncStatus('syncing', '取得中...');
+    fetch(gasUrl + '?t=' + Date.now())
+      .then(r => r.json())
+      .then(data => {
+        if (!data.sales) return;
+        sales        = data.sales        || [];
+        products     = data.products     && data.products.length > 0     ? data.products     : products;
+        inventory    = data.inventory    && data.inventory.length > 0    ? data.inventory    : inventory;
+        stockHistory = data.stockHistory && data.stockHistory.length > 0 ? data.stockHistory : stockHistory;
+        localStorage.setItem('fruits_sales',        JSON.stringify(sales));
+        localStorage.setItem('fruits_products',     JSON.stringify(products));
+        localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
+        localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
+        cloudSynced = true;
+        renderDashboard(); renderMaster(); renderQuick(); populateProductSelect();
+        setSyncStatus('success', '自動取得完了');
+      })
+      .catch(() => setSyncStatus('error', '取得エラー'));
   }
 });
 
@@ -2467,13 +2488,14 @@ document.addEventListener('visibilitychange', () => {
       .then(data => {
         if (!data.sales) return;
         sales        = data.sales        || [];
-        products     = data.products     || [];
-        inventory    = data.inventory    || [];
-        stockHistory = data.stockHistory || [];
+        products     = data.products     && data.products.length > 0 ? data.products     : products;
+        inventory    = data.inventory    && data.inventory.length > 0 ? data.inventory    : inventory;
+        stockHistory = data.stockHistory && data.stockHistory.length > 0 ? data.stockHistory : stockHistory;
         localStorage.setItem('fruits_sales',        JSON.stringify(sales));
         localStorage.setItem('fruits_products',     JSON.stringify(products));
         localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
         localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
+        cloudSynced = true;
         renderDashboard();
         renderMaster();
         renderQuick();
