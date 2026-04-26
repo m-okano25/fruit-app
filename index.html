@@ -1,0 +1,2450 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍊 果物売上管理アプリ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --orange: #f97316;
+    --orange-light: #fed7aa;
+    --orange-pale: #fff7ed;
+    --beige: #fef3c7;
+    --beige-dark: #d97706;
+    --amazon: #f97316;
+    --mercari: #ec4899;
+    --other: #3b82f6;
+    --green: #16a34a;
+    --red: #dc2626;
+    --text: #1c1917;
+    --text-muted: #78716c;
+    --border: #e7e5e4;
+    --shadow: 0 2px 8px rgba(0,0,0,0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+    background: #fef9f4;
+    color: var(--text);
+    min-height: 100vh;
+  }
+  /* Header */
+  header {
+    background: linear-gradient(135deg, var(--orange) 0%, #fb923c 60%, #fbbf24 100%);
+    color: white;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(249,115,22,0.4);
+  }
+  header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: 0.02em; }
+  header .subtitle { font-size: 0.78rem; opacity: 0.88; margin-top: 2px; }
+
+  /* Tab navigation */
+  nav {
+    background: white;
+    border-bottom: 2px solid var(--orange-light);
+    display: flex;
+    overflow-x: auto;
+    padding: 0 12px;
+  }
+  nav button {
+    padding: 12px 18px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+  }
+  nav button.active {
+    color: var(--orange);
+    border-bottom-color: var(--orange);
+  }
+  nav button:hover { color: var(--orange); }
+
+  /* Main */
+  main { padding: 20px 16px; max-width: 1100px; margin: 0 auto; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Cards */
+  .card {
+    background: white;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 18px;
+    border: 1px solid var(--border);
+  }
+  .card h2 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--orange);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Form */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group label { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); }
+  .form-group input, .form-group select {
+    padding: 9px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+    background: white;
+  }
+  .form-group input:focus, .form-group select:focus {
+    outline: none;
+    border-color: var(--orange);
+    box-shadow: 0 0 0 3px rgba(249,115,22,0.12);
+  }
+  .form-group input[readonly] { background: var(--orange-pale); color: var(--text-muted); }
+
+  /* Real-time preview */
+  .realtime-box {
+    background: linear-gradient(135deg, var(--orange-pale), var(--beige));
+    border: 1.5px solid var(--orange-light);
+    border-radius: 12px;
+    padding: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 18px 0;
+  }
+  .realtime-item { text-align: center; }
+  .realtime-item .label { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; }
+  .realtime-item .value { font-size: 1.3rem; font-weight: 800; margin-top: 4px; }
+
+  /* Buttons */
+  .btn {
+    padding: 10px 22px;
+    border-radius: 9px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 700;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: var(--orange);
+    color: white;
+  }
+  .btn-primary:hover { background: #ea6c0a; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(249,115,22,0.4); }
+  .btn-secondary {
+    background: var(--orange-pale);
+    color: var(--orange);
+    border: 1.5px solid var(--orange-light);
+  }
+  .btn-secondary:hover { background: var(--orange-light); }
+  .btn-danger {
+    background: #fee2e2;
+    color: var(--red);
+    border: 1.5px solid #fecaca;
+    padding: 5px 12px;
+    font-size: 0.8rem;
+  }
+  .btn-danger:hover { background: #fecaca; }
+  .btn-sm { padding: 6px 14px; font-size: 0.82rem; }
+  .btn-group { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .badge-amazon   { background: #fff7ed; color: var(--amazon);   border: 1px solid #fed7aa; }
+  .badge-mercari  { background: #fdf2f8; color: var(--mercari);  border: 1px solid #fbcfe8; }
+  .badge-libecity { background: #f0fdf4; color: #16a34a;         border: 1px solid #bbf7d0; }
+  .badge-other    { background: #eff6ff; color: var(--other);    border: 1px solid #bfdbfe; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  thead th {
+    background: var(--orange-pale);
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 700;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    border-bottom: 2px solid var(--orange-light);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  tbody tr:hover { background: var(--orange-pale); }
+  tbody td { padding: 10px 12px; white-space: nowrap; }
+
+  /* Filter bar */
+  .filter-bar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    margin-bottom: 16px;
+  }
+  .filter-bar .form-group { min-width: 140px; }
+  .filter-bar label { font-size: 0.75rem; }
+
+  /* Dashboard stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px 18px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+  }
+  .stat-card .stat-label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
+  .stat-card .stat-value { font-size: 1.5rem; font-weight: 800; color: var(--text); margin-top: 4px; }
+  .stat-card .stat-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 3px; }
+
+  /* Platform summary */
+  .platform-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .platform-card {
+    border-radius: 12px;
+    padding: 14px 16px;
+    border: 1.5px solid;
+  }
+  .platform-card.amazon { background: #fff7ed; border-color: #fed7aa; }
+  .platform-card.mercari { background: #fdf2f8; border-color: #fbcfe8; }
+  .platform-card.libecity { background: #f0fdf4; border-color: #bbf7d0; }
+  .platform-card.other { background: #eff6ff; border-color: #bfdbfe; }
+  .platform-card .name { font-weight: 700; font-size: 0.88rem; }
+  .platform-card.amazon .name { color: var(--amazon); }
+  .platform-card.mercari .name { color: var(--mercari); }
+  .platform-card.libecity .name { color: var(--green); }
+  .platform-card.other .name { color: var(--other); }
+  .platform-card .nums { margin-top: 8px; }
+  .platform-card .nums div { font-size: 0.8rem; color: var(--text-muted); }
+  .platform-card .nums span { font-weight: 700; color: var(--text); }
+
+  /* Charts */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+  @media (max-width: 700px) {
+    .charts-grid { grid-template-columns: 1fr; }
+    .platform-grid { grid-template-columns: 1fr; }
+    .realtime-box { grid-template-columns: 1fr; }
+  }
+  .chart-card {
+    background: white;
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+  }
+  .chart-card h3 { font-size: 0.9rem; font-weight: 700; color: var(--text-muted); margin-bottom: 12px; }
+
+  /* Product master */
+  .master-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .product-card {
+    background: var(--orange-pale);
+    border: 1.5px solid var(--orange-light);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .product-card .prod-name { font-weight: 700; font-size: 1rem; color: var(--text); }
+  .product-card .prod-details { margin-top: 8px; font-size: 0.82rem; color: var(--text-muted); }
+  .product-card .prod-details div { margin-bottom: 3px; }
+  .product-card .prod-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+  }
+  .modal {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  }
+  .modal h3 { font-size: 1.05rem; font-weight: 700; color: var(--orange); margin-bottom: 18px; }
+  .modal .form-grid { grid-template-columns: 1fr 1fr; }
+  .modal .btn-group { margin-top: 18px; justify-content: flex-end; }
+
+  /* Profit color */
+  .positive { color: var(--green); font-weight: 700; }
+  .negative { color: var(--red); font-weight: 700; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 40px; color: var(--text-muted); font-size: 0.9rem; }
+  .empty .icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+  /* Period filter buttons */
+  .period-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+  .period-btn {
+    padding: 7px 16px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: white;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all 0.2s;
+  }
+  .period-btn.active { background: var(--orange); color: white; border-color: var(--orange); }
+
+  /* Detail table */
+  .detail-table { font-size: 0.8rem; }
+  .detail-table th { font-size: 0.73rem; padding: 8px 10px; }
+  .detail-table td { padding: 8px 10px; }
+
+  /* Sync status */
+  .sync-badge {
+    margin-left: auto;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 5px 12px;
+    border-radius: 99px;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    cursor: default;
+  }
+  .sync-badge.syncing { background: rgba(255,255,255,0.3); }
+  .sync-badge.success { background: rgba(22,163,74,0.7); }
+  .sync-badge.error   { background: rgba(220,38,38,0.7); }
+  .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: white; flex-shrink: 0; }
+  .sync-dot.spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Settings tab */
+  .settings-section { margin-bottom: 20px; }
+  .setup-steps { counter-reset: step; }
+  .setup-step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .setup-step:last-child { border-bottom: none; }
+  .step-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--orange);
+    color: white;
+    font-weight: 800;
+    font-size: 0.85rem;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .step-body { flex: 1; }
+  .step-body strong { font-size: 0.9rem; }
+  .step-body p { font-size: 0.82rem; color: var(--text-muted); margin-top: 4px; line-height: 1.6; }
+  .code-block {
+    background: #1c1917;
+    color: #fef3c7;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 0.78rem;
+    margin-top: 8px;
+    word-break: break-all;
+  }
+  .url-input-wrap { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .url-input-wrap input { flex: 1; min-width: 200px; }
+
+  /* List table unit/total cell */
+  .cell-unit { font-size: 0.75rem; color: var(--text-muted); }
+  .cell-total { font-size: 0.88rem; font-weight: 700; color: var(--text); }
+  .cell-arrow { font-size: 0.7rem; color: var(--orange); margin: 0 1px; }
+
+  /* Summary tfoot */
+  tfoot tr { background: var(--orange-pale); border-top: 2px solid var(--orange-light); }
+  tfoot td { padding: 10px 12px; font-weight: 700; font-size: 0.85rem; white-space: nowrap; }
+  tfoot .total-label { color: var(--orange); font-size: 0.8rem; display: block; }
+  tfoot .total-value { color: var(--text); }
+
+  /* Inventory */
+  .inv-alert-bar {
+    background: linear-gradient(135deg,#fef2f2,#fff7ed);
+    border: 1.5px solid #fca5a5;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .inv-alert-bar h3 { color: var(--red); font-size: 0.9rem; margin-bottom: 8px; }
+  .inv-alert-item { font-size: 0.82rem; color: var(--text); padding: 3px 0; }
+  .shop-chip {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-left: 4px;
+  }
+  .shop-mercari  { background:#fdf2f8; color:var(--mercari); border:1px solid #fbcfe8; }
+  .shop-amazon   { background:#fff7ed; color:var(--amazon);  border:1px solid #fed7aa; }
+  .shop-libecity { background:#f0fdf4; color:#16a34a;        border:1px solid #bbf7d0; }
+  .shop-other    { background:#eff6ff; color:var(--other);   border:1px solid #bfdbfe; }
+  .inv-qty {
+    font-size: 1.1rem;
+    font-weight: 800;
+    text-align: center;
+  }
+  .inv-qty.low { color: var(--red); }
+  .inv-qty.ok  { color: var(--green); }
+  .inv-adj { display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .adj-btn {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: white;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  .adj-btn:hover { border-color: var(--orange); color: var(--orange); }
+  .hist-type-sale    { color: var(--red);   font-weight: 700; }
+  .hist-type-restock { color: var(--green); font-weight: 700; }
+  .hist-type-adj     { color: var(--other); font-weight: 700; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: var(--orange-light); border-radius: 3px; }
+
+  /* Quick Sale */
+  .quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .quick-card { background: white; border-radius: 14px; padding: 18px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+  .quick-card .qc-name { font-weight: 700; font-size: 1rem; margin-bottom: 4px; }
+  .quick-card .qc-stock { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 14px; }
+  .quick-btn-group { display: flex; flex-direction: column; gap: 8px; }
+  .quick-btn { padding: 13px 16px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: filter 0.15s, transform 0.1s; width: 100%; }
+  .quick-btn:active { transform: scale(0.97); }
+  .quick-btn.amazon  { background: #fff3e0; color: #e65100; }
+  .quick-btn.mercari { background: #fce4ec; color: #c2185b; }
+  .quick-btn.libecity { background: #e8f5e9; color: #2e7d32; }
+  .quick-btn.done { background: #dcfce7 !important; color: #15803d !important; }
+  .quick-empty { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 0.95rem; }
+  .prod-prices { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .price-badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .price-badge.amazon  { background: #fff3e0; color: #e65100; }
+  .price-badge.mercari { background: #fce4ec; color: #c2185b; }
+  .price-badge.libecity { background: #e8f5e9; color: #2e7d32; }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="font-size:2rem">🍊</div>
+  <div>
+    <h1>果物売上管理アプリ</h1>
+    <div class="subtitle">Amazon・メルカリ・リベシティ市場・その他 ネット販売管理</div>
+  </div>
+  <div class="sync-badge" id="sync-badge" title="同期ステータス">
+    <div class="sync-dot" id="sync-dot"></div>
+    <span id="sync-label">ローカル保存</span>
+  </div>
+</header>
+
+<nav>
+  <button onclick="showTab('quick')" style="color:var(--orange);font-weight:700;">⚡ クイック売上</button>
+  <button class="active" onclick="showTab('dashboard')">📊 ダッシュボード</button>
+  <button onclick="showTab('input')">➕ 売上入力</button>
+  <button onclick="showTab('list')">📋 売上一覧</button>
+  <button onclick="showTab('master')">🛍️ 商品マスター</button>
+  <button onclick="showTab('inventory')">📦 在庫管理</button>
+  <button onclick="showTab('settings')">⚙️ 設定</button>
+</nav>
+
+<main>
+
+<!-- ===== DASHBOARD ===== -->
+<div id="tab-dashboard" class="tab-panel active">
+  <div class="period-btns">
+    <button class="period-btn active" onclick="setPeriod('thisMonth', this)">今月</button>
+    <button class="period-btn" onclick="setPeriod('lastMonth', this)">先月</button>
+    <button class="period-btn" onclick="setPeriod('custom', this)">カスタム</button>
+    <span id="custom-range" style="display:none; gap:6px; align-items:center; flex-wrap:wrap;">
+      <input type="date" id="dash-from" class="form-group input" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.82rem;" onchange="renderDashboard()">
+      <span style="font-size:0.82rem;">〜</span>
+      <input type="date" id="dash-to" class="form-group input" style="padding:6px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.82rem;" onchange="renderDashboard()">
+    </span>
+  </div>
+
+  <div class="stats-grid" id="stats-grid"></div>
+
+  <div class="platform-grid" id="platform-grid"></div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>📦 商品別売上ランキング</h3>
+      <canvas id="chart-product" height="220"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>📈 月別推移（売上・利益）</h3>
+      <canvas id="chart-monthly" height="220"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>💴 コスト内訳集計</h2>
+    <div id="cost-breakdown" class="stats-grid"></div>
+  </div>
+
+  <div class="card">
+    <h2>📊 商品別利益詳細</h2>
+    <div class="table-wrap">
+      <table class="detail-table" id="product-detail-table">
+        <thead>
+          <tr>
+            <th>商品名</th><th>件数</th><th>売上合計</th><th>原価合計</th><th>送料合計</th><th>梱包費合計</th><th>手数料合計</th><th>利益合計</th><th>利益率</th>
+          </tr>
+        </thead>
+        <tbody id="product-detail-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== INPUT ===== -->
+<div id="tab-input" class="tab-panel">
+  <div class="card">
+    <h2>➕ 売上入力</h2>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>販売日 *</label>
+        <input type="date" id="in-date">
+      </div>
+      <div class="form-group">
+        <label>商品名 * <span style="font-size:0.75rem;color:var(--text-muted);">（入力または候補から選択）</span></label>
+        <input type="text" id="in-product-text" list="product-datalist"
+               placeholder="例：みかん 5kg" autocomplete="off"
+               oninput="onProductTextInput()" style="width:100%;">
+        <datalist id="product-datalist"></datalist>
+      </div>
+      <div class="form-group">
+        <label>販売プラットフォーム *</label>
+        <select id="in-platform">
+          <option value="Amazon">Amazon</option>
+          <option value="メルカリ">メルカリ</option>
+          <option value="リベシティ市場">リベシティ市場</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>販売価格（円）</label>
+        <input type="number" id="in-price" placeholder="0" oninput="calcRealtime()">
+      </div>
+      <div class="form-group">
+        <label>原価（円）</label>
+        <input type="number" id="in-cost" placeholder="0" oninput="calcRealtime()">
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label>送料（円）</label>
+        <input type="number" id="in-shipping" placeholder="0" oninput="calcRealtime()" style="margin-bottom:8px;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <span style="font-size:0.78rem;color:var(--text-muted);white-space:nowrap;font-weight:600;">🚚 佐川：</span>
+          <select id="in-sagawa-region" onchange="applySagawaRate()" style="flex:1;min-width:90px;font-size:0.82rem;padding:7px 6px;border:1.5px solid var(--border);border-radius:8px;background:white;color:var(--text);">
+            <option value="">地域を選択</option>
+            <option>北海道</option><option>北東北</option><option>南東北</option><option>関東</option>
+            <option>信越</option><option>東海</option><option>北陸</option><option>関西</option>
+            <option>中国</option><option>四国</option><option>北九州</option><option>南九州</option>
+          </select>
+          <select id="in-sagawa-size" onchange="applySagawaRate()" style="flex:1;min-width:110px;font-size:0.82rem;padding:7px 6px;border:1.5px solid var(--border);border-radius:8px;background:white;color:var(--text);">
+            <option value="">サイズ選択</option>
+            <option value="60">60size（2kg）</option>
+            <option value="80">80size（5kg）</option>
+            <option value="100">100size（10kg）</option>
+            <option value="140">140size（20kg）</option>
+          </select>
+          <select id="in-sagawa-type" onchange="applySagawaRate()" style="min-width:80px;font-size:0.82rem;padding:7px 6px;border:1.5px solid var(--border);border-radius:8px;background:white;color:var(--text);">
+            <option value="0">通常</option>
+            <option value="1">❄️ クール</option>
+          </select>
+          <span id="in-sagawa-preview" style="font-size:0.82rem;font-weight:700;color:var(--orange);min-width:60px;"></span>
+        </div>
+        <div id="in-shipping-custom-row" style="display:none;margin-top:6px;">
+          <select id="in-shipping-preset" onchange="applyShippingPreset()" style="width:100%;font-size:0.82rem;padding:7px 6px;border:1.5px solid var(--border);border-radius:8px;background:white;color:var(--text);">
+            <option value="">📋 カスタム配送料から選択</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>梱包資材費（円）</label>
+        <input type="number" id="in-packing" placeholder="0" oninput="calcRealtime()">
+      </div>
+      <div class="form-group">
+        <label>手数料率</label>
+        <select id="in-fee-rate" onchange="calcRealtime()">
+          <option value="0">なし（0%）</option>
+          <option value="10">10%</option>
+          <option value="11">11%</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>手数料（円）※自動計算</label>
+        <input type="number" id="in-fee" placeholder="0" readonly>
+      </div>
+      <div class="form-group">
+        <label>個数</label>
+        <input type="number" id="in-qty" placeholder="1" value="1" min="0.1" step="0.5" oninput="calcRealtime()">
+      </div>
+    </div>
+
+    <div class="realtime-box">
+      <div class="realtime-item">
+        <div class="label">💰 総コスト</div>
+        <div class="value" id="rt-cost" style="color: var(--text-muted);">¥0</div>
+      </div>
+      <div class="realtime-item">
+        <div class="label">📈 利益</div>
+        <div class="value" id="rt-profit">¥0</div>
+      </div>
+      <div class="realtime-item">
+        <div class="label">📊 利益率</div>
+        <div class="value" id="rt-rate">0%</div>
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="clearInput()">🗑️ クリア</button>
+      <button class="btn btn-primary" onclick="saveEntry()">💾 保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== LIST ===== -->
+<div id="tab-list" class="tab-panel">
+  <div class="card">
+    <h2>📋 売上一覧</h2>
+    <div class="filter-bar">
+      <div class="form-group">
+        <label>日付（From）</label>
+        <input type="date" id="list-from" onchange="renderList()">
+      </div>
+      <div class="form-group">
+        <label>日付（To）</label>
+        <input type="date" id="list-to" onchange="renderList()">
+      </div>
+      <div class="form-group">
+        <label>プラットフォーム</label>
+        <select id="list-platform" onchange="renderList()">
+          <option value="">すべて</option>
+          <option value="Amazon">Amazon</option>
+          <option value="メルカリ">メルカリ</option>
+          <option value="リベシティ市場">リベシティ市場</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>月</label>
+        <input type="month" id="list-month" onchange="renderList()">
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="clearListFilter()">リセット</button>
+    </div>
+    <div class="btn-group" style="margin-bottom:14px;">
+      <button class="btn btn-secondary btn-sm" onclick="exportCSV('all')">📥 全件CSV</button>
+      <button class="btn btn-secondary btn-sm" onclick="exportCSV('filtered')">📥 表示分CSV</button>
+    </div>
+    <div class="table-wrap">
+      <table id="sales-table">
+        <thead>
+          <tr>
+            <th>日付</th><th>商品名</th><th>プラットフォーム</th>
+            <th>販売価格<br><span style="font-weight:400;font-size:0.72rem;">単価 / 合計</span></th>
+            <th>原価<br><span style="font-weight:400;font-size:0.72rem;">単価 / 合計</span></th>
+            <th>送料<br><span style="font-weight:400;font-size:0.72rem;">固定</span></th>
+            <th>梱包<br><span style="font-weight:400;font-size:0.72rem;">単価 / 合計</span></th>
+            <th>手数料<br><span style="font-weight:400;font-size:0.72rem;">単価 / 合計</span></th>
+            <th>個数</th>
+            <th>総コスト</th><th>利益</th><th>利益率</th><th>操作</th>
+          </tr>
+        </thead>
+        <tfoot id="sales-foot"></tfoot>
+        <tbody id="sales-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MASTER ===== -->
+<div id="tab-master" class="tab-panel">
+  <div class="card">
+    <h2>🛍️ 商品マスター</h2>
+    <button class="btn btn-primary" onclick="openProductModal()">＋ 新規登録</button>
+  </div>
+  <div class="master-grid" id="master-grid"></div>
+</div>
+
+</main>
+
+<!-- ===== QUICK SALE TAB ===== -->
+<div id="tab-quick" class="tab-panel" style="display:none;">
+  <div class="card">
+    <h2>⚡ クイック売上</h2>
+    <p style="font-size:0.85rem;color:var(--text-muted);margin-top:-8px;">通知が来たらボタンを1タップ。在庫と売上を自動記録します。</p>
+  </div>
+  <div id="quick-grid" class="quick-grid"></div>
+</div>
+
+<!-- ===== INVENTORY TAB ===== -->
+<div id="tab-inventory" class="tab-panel" style="display:none;">
+
+  <!-- アラートバー -->
+  <div class="inv-alert-bar" id="inv-alert-bar">
+    <h3>⚠️ 在庫が少ない商品</h3>
+    <div id="inv-alert-list"></div>
+  </div>
+
+  <!-- 操作ボタン -->
+  <div class="card" style="padding:14px 18px;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <button class="btn btn-primary" onclick="openInvModal()">＋ 商品を在庫登録</button>
+      <button class="btn btn-secondary" onclick="showInvTab('stock')">📋 在庫一覧</button>
+      <button class="btn btn-secondary" onclick="showInvTab('history')">📜 入出荷履歴</button>
+    </div>
+  </div>
+
+  <!-- 在庫一覧 -->
+  <div id="inv-stock-panel">
+    <div class="card">
+      <h2>📦 在庫一覧</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>商品名</th>
+              <th>🩷 メルカリ</th>
+              <th>🟠 Amazon</th>
+              <th>🟢 リベシティ市場</th>
+              <th>合計</th>
+              <th>アラート閾値</th>
+              <th>換算倍率</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="inv-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 入出荷履歴 -->
+  <div id="inv-history-panel" style="display:none;">
+    <div class="card">
+      <h2>📜 入出荷履歴</h2>
+      <div class="filter-bar" style="margin-bottom:12px;">
+        <div class="form-group">
+          <label>商品名</label>
+          <select id="hist-product-filter" onchange="renderHistory()">
+            <option value="">すべて</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>種別</label>
+          <select id="hist-type-filter" onchange="renderHistory()">
+            <option value="">すべて</option>
+            <option value="sale">売上（自動）</option>
+            <option value="restock">入荷</option>
+            <option value="adjustment">手動調整</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>日時</th><th>商品名</th><th>ショップ</th><th>種別</th><th>変動</th><th>在庫残</th><th>メモ</th></tr>
+          </thead>
+          <tbody id="hist-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 在庫登録・編集モーダル -->
+<div class="modal-overlay" id="inv-modal" style="display:none" onclick="closeInvModal(event)">
+  <div class="modal" style="max-width:500px;">
+    <h3 id="inv-modal-title">📦 在庫登録</h3>
+    <input type="hidden" id="inv-edit-id">
+    <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group" style="grid-column:1/-1;">
+        <label>商品名 *</label>
+        <input type="text" id="inv-name" placeholder="例：みかん 5kg">
+      </div>
+      <div class="form-group">
+        <label>🩷 メルカリ 在庫数</label>
+        <input type="number" id="inv-mercari" placeholder="0" min="0">
+      </div>
+      <div class="form-group">
+        <label>🟠 Amazon 在庫数</label>
+        <input type="number" id="inv-amazon" placeholder="0" min="0">
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label>🟢 リベシティ市場 在庫数</label>
+        <input type="number" id="inv-libecity" placeholder="0" min="0">
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label>⚠️ アラート閾値（この数以下で警告）</label>
+        <input type="number" id="inv-threshold" placeholder="3" min="0">
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label>🔄 入荷換算倍率 <span style="font-size:0.75rem;color:var(--text-muted);">（1入荷単位 = ○販売単位）</span></label>
+        <input type="number" id="inv-conversion" placeholder="1" min="1" step="0.5" value="1">
+        <div id="inv-conversion-preview" style="font-size:0.8rem;color:var(--orange);margin-top:4px;"></div>
+      </div>
+    </div>
+    <div class="btn-group" style="margin-top:16px;justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="closeInvModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveInventoryItem()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 入荷登録モーダル -->
+<div class="modal-overlay" id="restock-modal" style="display:none" onclick="closeRestockModal(event)">
+  <div class="modal" style="max-width:400px;">
+    <h3>📥 入荷登録</h3>
+    <input type="hidden" id="restock-id">
+    <div class="form-grid" style="grid-template-columns:1fr;gap:12px;">
+      <div class="form-group">
+        <label>商品名</label>
+        <input type="text" id="restock-name" readonly style="background:var(--orange-pale);">
+      </div>
+      <div class="form-group">
+        <label>ショップ</label>
+        <select id="restock-shop">
+          <option value="メルカリ">🩷 メルカリ</option>
+          <option value="Amazon">🟠 Amazon</option>
+          <option value="リベシティ市場">🟢 リベシティ市場</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>入荷数 <span id="restock-unit-label" style="font-size:0.75rem;color:var(--text-muted);"></span></label>
+        <input type="number" id="restock-qty" placeholder="0" min="1" oninput="updateRestockPreview()">
+      </div>
+      <div id="restock-conversion-box" style="display:none;background:var(--orange-pale);border:1.5px solid var(--orange-light);border-radius:8px;padding:10px 14px;font-size:0.85rem;">
+        <span id="restock-conversion-text"></span>
+      </div>
+      <div class="form-group">
+        <label>メモ</label>
+        <input type="text" id="restock-note" placeholder="例：第3ロット入荷">
+      </div>
+    </div>
+    <div class="btn-group" style="margin-top:16px;justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="closeRestockModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveRestock()">📥 入荷を登録</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SETTINGS TAB ===== -->
+<div id="tab-settings" class="tab-panel" style="display:none;">
+
+  <div class="card settings-section">
+    <h2>☁️ Googleスプレッドシート同期</h2>
+    <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px;">
+      Google Apps ScriptをWebアプリとして公開し、発行されたURLを入力するとPC・スマホ間でデータが同期されます。
+    </p>
+
+    <div class="setup-steps">
+      <div class="setup-step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Googleスプレッドシートを新規作成する</strong>
+          <p><a href="https://sheets.new" target="_blank" style="color:var(--orange);">sheets.new</a> を開いて新しいスプレッドシートを作成してください。</p>
+        </div>
+      </div>
+      <div class="setup-step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Apps Scriptを開いてコードを貼り付ける</strong>
+          <p>メニュー「拡張機能」→「Apps Script」を開き、<code style="background:var(--orange-pale);padding:2px 6px;border-radius:4px;">GoogleAppsScript_コード.gs</code> の内容を全てコピーして貼り付け、保存（Ctrl+S）します。</p>
+        </div>
+      </div>
+      <div class="setup-step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>ウェブアプリとしてデプロイする</strong>
+          <p>右上の「デプロイ」→「新しいデプロイ」をクリック。種類：<strong>ウェブアプリ</strong>、アクセス：<strong>全員</strong> に設定して「デプロイ」を押します。</p>
+        </div>
+      </div>
+      <div class="setup-step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <strong>発行されたURLを以下に貼り付ける</strong>
+          <p>「ウェブアプリのURL」をコピーして、以下に貼り付けて「保存して接続」を押してください。</p>
+          <div class="url-input-wrap">
+            <input type="url" id="gas-url-input" class="form-group input" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;" placeholder="https://script.google.com/macros/s/...">
+            <button class="btn btn-primary" onclick="saveGasUrl()">保存して接続</button>
+            <button class="btn btn-secondary" onclick="clearGasUrl()">接続解除</button>
+          </div>
+          <div id="gas-url-status" style="margin-top:10px;font-size:0.82rem;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🔄 データ同期</h2>
+    <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:14px;">
+      手動で同期することもできます。別の端末でデータを変更した場合は「データを取得」で最新データを読み込んでください。
+    </p>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="syncToCloud()">☁️ クラウドへ保存</button>
+      <button class="btn btn-secondary" onclick="loadFromCloud()">📥 データを取得（上書き）</button>
+    </div>
+    <p style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">
+      ※「データを取得」を実行すると、このデバイスのデータがクラウドのデータで上書きされます。
+    </p>
+  </div>
+
+  <div class="card settings-section">
+    <h2>🚚 配送料マスター</h2>
+    <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:14px;">
+      佐川以外の配送料（ゆうパックなど）をここに登録すると、売上入力で選択できます。佐川の料金は自動で組み込まれています。
+    </p>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <input type="text" id="sr-label" placeholder="例：関東 60サイズ" style="flex:2;min-width:140px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;">
+      <input type="number" id="sr-price" placeholder="金額（円）" style="flex:1;min-width:100px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;">
+      <button class="btn btn-primary" onclick="addShippingRate()" style="white-space:nowrap;">＋ 追加</button>
+    </div>
+    <div id="sr-list">
+      <p style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:12px 0;">登録された配送料はありません</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>ℹ️ 現在の状態</h2>
+    <div id="settings-status" style="font-size:0.88rem;color:var(--text-muted);">読み込み中...</div>
+  </div>
+</div>
+
+<!-- Edit entry modal -->
+<div class="modal-overlay" id="edit-entry-modal" style="display:none" onclick="closeEditEntryModal(event)">
+  <div class="modal" style="max-width:560px;">
+    <h3>✏️ 売上データを編集</h3>
+    <input type="hidden" id="ee-id">
+    <div class="form-grid" style="grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="form-group">
+        <label>販売日</label>
+        <input type="date" id="ee-date">
+      </div>
+      <div class="form-group">
+        <label>商品名</label>
+        <input type="text" id="ee-product">
+      </div>
+      <div class="form-group">
+        <label>プラットフォーム</label>
+        <select id="ee-platform">
+          <option value="Amazon">Amazon</option>
+          <option value="メルカリ">メルカリ</option>
+          <option value="リベシティ市場">リベシティ市場</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>販売価格（円）</label>
+        <input type="number" id="ee-price" oninput="calcEditRealtime()">
+      </div>
+      <div class="form-group">
+        <label>原価（円）</label>
+        <input type="number" id="ee-cost" oninput="calcEditRealtime()">
+      </div>
+      <div class="form-group">
+        <label>送料（円）※個数と連動しない</label>
+        <input type="number" id="ee-shipping" oninput="calcEditRealtime()">
+      </div>
+      <div class="form-group">
+        <label>梱包資材費（円）</label>
+        <input type="number" id="ee-packing" oninput="calcEditRealtime()">
+      </div>
+      <div class="form-group">
+        <label>手数料率</label>
+        <select id="ee-fee-rate" onchange="calcEditRealtime()">
+          <option value="0">なし（0%）</option>
+          <option value="10">10%</option>
+          <option value="11">11%</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>手数料（円）※自動計算</label>
+        <input type="number" id="ee-fee" readonly>
+      </div>
+      <div class="form-group">
+        <label>個数</label>
+        <input type="number" id="ee-qty" min="0.1" step="0.5" oninput="calcEditRealtime()">
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <div class="realtime-box" style="margin:0;">
+          <div class="realtime-item"><div class="label">総コスト</div><div class="value" id="ee-rt-cost" style="color:var(--text-muted);">¥0</div></div>
+          <div class="realtime-item"><div class="label">利益</div><div class="value" id="ee-rt-profit">¥0</div></div>
+          <div class="realtime-item"><div class="label">利益率</div><div class="value" id="ee-rt-rate">0%</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="closeEditEntryModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveEditEntry()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Product modal -->
+<div class="modal-overlay" id="product-modal" style="display:none" onclick="closeProductModal(event)">
+  <div class="modal">
+    <h3 id="modal-title">🛍️ 商品登録</h3>
+    <input type="hidden" id="edit-index" value="">
+    <div class="form-grid" style="grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="form-group" style="grid-column:1/-1;">
+        <label>商品名 *</label>
+        <input type="text" id="m-name" placeholder="例：みかん 5kg">
+      </div>
+      <div class="form-group">
+        <label>標準原価（円）</label>
+        <input type="number" id="m-cost" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>標準送料（円）</label>
+        <input type="number" id="m-shipping" placeholder="0">
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label>標準梱包資材費（円）</label>
+        <input type="number" id="m-packing" placeholder="0">
+      </div>
+      <div class="form-group" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
+        <label style="font-weight:700;color:var(--orange);">⚡ クイック売上 価格設定</label>
+      </div>
+      <div class="form-group">
+        <label>🟠 Amazon価格（円）</label>
+        <input type="number" id="m-price-amazon" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>🩷 メルカリ価格（円）</label>
+        <input type="number" id="m-price-mercari" placeholder="0">
+      </div>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label>🟢 リベシティ市場価格（円）</label>
+        <input type="number" id="m-price-libecity" placeholder="0">
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-secondary" onclick="closeProductModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveProduct()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== DATA =====
+let products = JSON.parse(localStorage.getItem('fruits_products') || '[]');
+let sales = JSON.parse(localStorage.getItem('fruits_sales') || '[]');
+
+// Default products
+if (products.length === 0) {
+  products = [
+    { name: 'みかん 5kg', cost: 1200, shipping: 600, packing: 80 },
+    { name: 'りんご 3kg', cost: 900, shipping: 500, packing: 80 },
+    { name: 'いちご 1パック', cost: 500, shipping: 350, packing: 60 },
+  ];
+  saveProducts();
+}
+
+let currentPeriod = 'thisMonth';
+let dashFrom = null, dashTo = null;
+let filteredSales = [];
+let chartProduct = null, chartMonthly = null;
+let gasUrl       = localStorage.getItem('fruits_gasUrl') || '';
+let shippingRates = JSON.parse(localStorage.getItem('fruits_shippingRates') || '[]');
+function saveShippingRates() { localStorage.setItem('fruits_shippingRates', JSON.stringify(shippingRates)); }
+
+function saveProducts() {
+  localStorage.setItem('fruits_products', JSON.stringify(products));
+  if (gasUrl) syncToCloud();
+}
+function saveSales() {
+  localStorage.setItem('fruits_sales', JSON.stringify(sales));
+  if (gasUrl) syncToCloud();
+}
+
+// ===== TABS =====
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => { p.classList.remove('active'); p.style.display = 'none'; });
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById('tab-' + name);
+  panel.style.display = 'block';
+  panel.classList.add('active');
+  const tabs = ['quick','dashboard','input','list','master','inventory','settings'];
+  document.querySelectorAll('nav button')[tabs.indexOf(name)].classList.add('active');
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'list') renderList();
+  if (name === 'master') renderMaster();
+  if (name === 'input') populateProductSelect();
+  if (name === 'settings') { renderSettingsStatus(); renderShippingRates(); }
+  if (name === 'inventory') { renderInventory(); populateProductSelect(); }
+  if (name === 'quick') renderQuick();
+}
+
+// ===== SYNC =====
+function setSyncStatus(state, text) {
+  const badge = document.getElementById('sync-badge');
+  const dot   = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  badge.className = 'sync-badge ' + state;
+  dot.className   = 'sync-dot' + (state === 'syncing' ? ' spin' : '');
+  label.textContent = text;
+}
+
+function saveGasUrl() {
+  const input = document.getElementById('gas-url-input').value.trim();
+  if (!input.startsWith('https://script.google.com')) {
+    document.getElementById('gas-url-status').innerHTML =
+      '<span style="color:var(--red);">❌ URLが正しくありません。Apps ScriptのURLを入力してください。</span>';
+    return;
+  }
+  gasUrl = input;
+  localStorage.setItem('fruits_gasUrl', gasUrl);
+  document.getElementById('gas-url-status').innerHTML =
+    '<span style="color:var(--green);">✅ URLを保存しました。接続テスト中...</span>';
+  syncToCloud();
+}
+
+function clearGasUrl() {
+  gasUrl = '';
+  localStorage.removeItem('fruits_gasUrl');
+  document.getElementById('gas-url-input').value = '';
+  document.getElementById('gas-url-status').innerHTML =
+    '<span style="color:var(--text-muted);">接続を解除しました。</span>';
+  setSyncStatus('', 'ローカル保存');
+  renderSettingsStatus();
+}
+
+async function syncToCloud() {
+  if (!gasUrl) return;
+  setSyncStatus('syncing', '同期中...');
+  try {
+    const payload = JSON.stringify({ sales, products, inventory, stockHistory });
+    const res = await fetch(gasUrl, {
+      method: 'POST',
+      body: payload,
+      headers: { 'Content-Type': 'text/plain' }
+    });
+    const json = await res.json();
+    if (json.success) {
+      const now = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+      setSyncStatus('success', '同期済 ' + now);
+      const st = document.getElementById('gas-url-status');
+      if (st) st.innerHTML = '<span style="color:var(--green);">✅ クラウドへの保存に成功しました。</span>';
+    } else {
+      throw new Error('保存失敗');
+    }
+  } catch(e) {
+    setSyncStatus('error', '同期エラー');
+    const st = document.getElementById('gas-url-status');
+    if (st) st.innerHTML = '<span style="color:var(--red);">❌ 同期に失敗しました。URLとネット接続を確認してください。</span>';
+  }
+}
+
+async function loadFromCloud() {
+  if (!gasUrl) { alert('⚙️ 設定タブでApps ScriptのURLを先に登録してください。'); return; }
+  if (!confirm('クラウドのデータでこのデバイスのデータを上書きします。よろしいですか？')) return;
+  setSyncStatus('syncing', '取得中...');
+  try {
+    const res = await fetch(gasUrl + '?t=' + Date.now());
+    const data = await res.json();
+    if (data.sales !== undefined) {
+      sales        = data.sales || [];
+      products     = data.products     && data.products.length > 0     ? data.products     : products;
+      inventory    = data.inventory    && data.inventory.length > 0    ? data.inventory    : inventory;
+      stockHistory = data.stockHistory && data.stockHistory.length > 0 ? data.stockHistory : stockHistory;
+      saveSales();
+      saveProducts();
+      saveInventory();
+      populateProductSelect();
+      renderDashboard();
+      renderList();
+      renderMaster();
+      const now = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+      setSyncStatus('success', '取得済 ' + now);
+      alert('✅ クラウドからデータを取得しました（売上 ' + sales.length + '件）');
+    } else {
+      throw new Error('データ形式が不正');
+    }
+  } catch(e) {
+    setSyncStatus('error', '取得エラー');
+    alert('❌ データの取得に失敗しました。URLとネット接続を確認してください。');
+  }
+}
+
+// ===== 佐川配送料テーブル =====
+const SAGAWA_RATES = {
+  '北海道': { '60':[1210,1990], '80':[1320,2370], '100':[1430,2810], '140':[1450,3400] },
+  '北東北': { '60':[990,1660],  '80':[1100,1930], '100':[1160,2150], '140':[1160,2210] },
+  '南東北': { '60':[990,1660],  '80':[1100,1930], '100':[1160,2150], '140':[1160,2210] },
+  '関東':   { '60':[880,1450],  '80':[990,1570],  '100':[1050,1780], '140':[1050,2210] },
+  '信越':   { '60':[880,1330],  '80':[990,1490],  '100':[1050,1710], '140':[1050,2260] },
+  '東海':   { '60':[770,1370],  '80':[830,1420],  '100':[880,1650],  '140':[880,2100]  },
+  '北陸':   { '60':[770,1270],  '80':[830,1410],  '100':[880,1600],  '140':[880,2100]  },
+  '関西':   { '60':[660,1160],  '80':[720,1320],  '100':[770,1490],  '140':[800,1990]  },
+  '中国':   { '60':[610,1050],  '80':[660,1270],  '100':[660,1380],  '140':[720,1920]  },
+  '四国':   { '60':[610,1160],  '80':[660,1270],  '100':[720,1410],  '140':[780,1770]  },
+  '北九州': { '60':[550,1050],  '80':[610,1210],  '100':[660,1380],  '140':[660,1770]  },
+  '南九州': { '60':[550,1050],  '80':[610,1210],  '100':[660,1380],  '140':[660,1770]  },
+};
+
+function applySagawaRate() {
+  const region = document.getElementById('in-sagawa-region').value;
+  const size   = document.getElementById('in-sagawa-size').value;
+  const type   = parseInt(document.getElementById('in-sagawa-type').value);
+  const preview = document.getElementById('in-sagawa-preview');
+  if (!region || !size) { if (preview) preview.textContent = ''; return; }
+  const rate = SAGAWA_RATES[region]?.[size]?.[type];
+  if (rate !== undefined) {
+    document.getElementById('in-shipping').value = rate;
+    if (preview) preview.textContent = `→ ¥${rate.toLocaleString()}`;
+    calcRealtime();
+  }
+}
+
+// ===== 配送料マスター =====
+function addShippingRate() {
+  const label = document.getElementById('sr-label').value.trim();
+  const price = parseInt(document.getElementById('sr-price').value);
+  if (!label) { alert('ラベル名を入力してください'); return; }
+  if (!price || price < 0) { alert('金額を正しく入力してください'); return; }
+  shippingRates.push({ id: Date.now(), label, price });
+  saveShippingRates();
+  document.getElementById('sr-label').value = '';
+  document.getElementById('sr-price').value = '';
+  renderShippingRates();
+  populateShippingSelect();
+}
+
+function deleteShippingRate(id) {
+  shippingRates = shippingRates.filter(r => r.id !== id);
+  saveShippingRates();
+  renderShippingRates();
+  populateShippingSelect();
+}
+
+function renderShippingRates() {
+  const el = document.getElementById('sr-list');
+  if (!el) return;
+  if (shippingRates.length === 0) {
+    el.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;text-align:center;padding:12px 0;">登録された配送料はありません</p>';
+    return;
+  }
+  el.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+      <thead>
+        <tr style="background:var(--orange-pale);">
+          <th style="padding:8px 12px;text-align:left;border-radius:8px 0 0 0;">ラベル</th>
+          <th style="padding:8px 12px;text-align:right;">金額</th>
+          <th style="padding:8px 12px;text-align:center;border-radius:0 8px 0 0;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${shippingRates.map(r => `
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:9px 12px;font-weight:600;">${r.label}</td>
+            <td style="padding:9px 12px;text-align:right;font-weight:700;color:var(--orange);">¥${r.price.toLocaleString()}</td>
+            <td style="padding:9px 12px;text-align:center;">
+              <button class="btn btn-danger" onclick="deleteShippingRate(${r.id})" style="padding:4px 10px;font-size:0.78rem;">削除</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+function populateShippingSelect() {
+  const sel = document.getElementById('in-shipping-preset');
+  const row = document.getElementById('in-shipping-custom-row');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">📋 カスタム配送料から選択</option>' +
+    shippingRates.map(r => `<option value="${r.price}">${r.label}　¥${r.price.toLocaleString()}</option>`).join('');
+  if (row) row.style.display = shippingRates.length > 0 ? '' : 'none';
+}
+
+function applyShippingPreset() {
+  const sel = document.getElementById('in-shipping-preset');
+  if (!sel || !sel.value) return;
+  document.getElementById('in-shipping').value = sel.value;
+  sel.value = ''; // 選択後はリセット
+  calcRealtime();
+}
+
+function renderSettingsStatus() {
+  const el = document.getElementById('settings-status');
+  if (!el) return;
+  const urlInput = document.getElementById('gas-url-input');
+  if (urlInput) urlInput.value = gasUrl;
+  if (gasUrl) {
+    el.innerHTML = `
+      <div style="margin-bottom:6px;">📡 <strong>同期URL設定済み</strong></div>
+      <div style="color:var(--text-muted);font-size:0.8rem;word-break:break-all;">${gasUrl}</div>
+      <div style="margin-top:8px;">💾 売上データ：<strong>${sales.length} 件</strong></div>
+      <div>🛍️ 商品マスター：<strong>${products.length} 件</strong></div>
+    `;
+  } else {
+    el.innerHTML = `
+      <div>📡 同期URL：<strong>未設定（ローカル保存のみ）</strong></div>
+      <div style="margin-top:8px;">💾 売上データ：<strong>${sales.length} 件</strong></div>
+      <div>🛍️ 商品マスター：<strong>${products.length} 件</strong></div>
+    `;
+  }
+}
+
+// ===== PERIOD =====
+function setPeriod(p, btn) {
+  currentPeriod = p;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const cr = document.getElementById('custom-range');
+  cr.style.display = (p === 'custom') ? 'flex' : 'none';
+  renderDashboard();
+}
+
+function toDateStr(y, m, d) {
+  return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function getPeriodRange() {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  if (currentPeriod === 'thisMonth') {
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    return [toDateStr(y, m + 1, 1), toDateStr(y, m + 1, lastDay)];
+  } else if (currentPeriod === 'lastMonth') {
+    const lastDay = new Date(y, m, 0).getDate();
+    const lm = m === 0 ? 12 : m;
+    const ly = m === 0 ? y - 1 : y;
+    return [toDateStr(ly, lm, 1), toDateStr(ly, lm, lastDay)];
+  } else {
+    const f = document.getElementById('dash-from').value;
+    const t = document.getElementById('dash-to').value;
+    return [f || null, t || null];
+  }
+}
+
+function filterByPeriod(data) {
+  const [from, to] = getPeriodRange();
+  return data.filter(s => {
+    if (from && s.date < from) return false;
+    if (to && s.date > to) return false;
+    return true;
+  });
+}
+
+// ===== FORMAT =====
+function yen(v) { return '¥' + Math.round(v).toLocaleString(); }
+function pct(v) { return (isNaN(v) || !isFinite(v)) ? '0.0%' : v.toFixed(1) + '%'; }
+
+// ===== REALTIME CALC =====
+function calcRealtime() {
+  const price = parseFloat(document.getElementById('in-price').value) || 0;
+  const cost = parseFloat(document.getElementById('in-cost').value) || 0;
+  const shipping = parseFloat(document.getElementById('in-shipping').value) || 0;
+  const packing = parseFloat(document.getElementById('in-packing').value) || 0;
+  const feeRate = parseFloat(document.getElementById('in-fee-rate').value) || 0;
+  const qty = parseFloat(document.getElementById('in-qty').value) || 1;
+
+  const fee = price * (feeRate / 100);
+  document.getElementById('in-fee').value = Math.round(fee);
+
+  const totalCost = (cost + packing + fee) * qty + shipping;
+  const totalRevenue = price * qty;
+  const profit = totalRevenue - totalCost;
+  const rate = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+
+  document.getElementById('rt-cost').textContent = yen(totalCost);
+  const profitEl = document.getElementById('rt-profit');
+  profitEl.textContent = yen(profit);
+  profitEl.className = 'value ' + (profit >= 0 ? 'positive' : 'negative');
+  const rateEl = document.getElementById('rt-rate');
+  rateEl.textContent = pct(rate);
+  rateEl.className = 'value ' + (rate >= 0 ? 'positive' : 'negative');
+}
+
+// ===== PRODUCT SELECT（テキスト入力＋候補リスト方式） =====
+function populateProductSelect() {
+  // 商品マスター＋在庫管理の両方から商品名を収集してdatalistに反映
+  const dl = document.getElementById('product-datalist');
+  if (!dl) return;
+  const names = new Set();
+  products.forEach(p => names.add(p.name));
+  inventory.forEach(i => names.add(i.productName));
+  dl.innerHTML = [...names].map(n => `<option value="${n}">`).join('');
+}
+
+function onProductTextInput() {
+  const val = document.getElementById('in-product-text').value.trim();
+  // 商品マスターと一致したら原価等を自動入力
+  const master = products.find(p => p.name === val);
+  if (master) {
+    document.getElementById('in-cost').value     = master.cost;
+    document.getElementById('in-shipping').value = master.shipping;
+    document.getElementById('in-packing').value  = master.packing;
+  }
+  calcRealtime();
+}
+
+// ===== SAVE ENTRY =====
+function saveEntry() {
+  const dateVal    = document.getElementById('in-date').value;
+  const productName = document.getElementById('in-product-text').value.trim();
+
+  if (!dateVal)     { alert('販売日を入力してください'); return; }
+  if (!productName) { alert('商品名を入力してください'); return; }
+
+  const price = parseFloat(document.getElementById('in-price').value) || 0;
+  const cost = parseFloat(document.getElementById('in-cost').value) || 0;
+  const shipping = parseFloat(document.getElementById('in-shipping').value) || 0;
+  const packing = parseFloat(document.getElementById('in-packing').value) || 0;
+  const feeRate = parseFloat(document.getElementById('in-fee-rate').value) || 0;
+  const fee = price * (feeRate / 100);
+  const qty = parseFloat(document.getElementById('in-qty').value) || 1;
+  const platform = document.getElementById('in-platform').value;
+
+  const totalCost = (cost + packing + fee) * qty + shipping;
+  const totalRevenue = price * qty;
+  const profit = totalRevenue - totalCost;
+  const profitRate = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+
+  const entry = {
+    id: Date.now(),
+    date: dateVal,
+    product: productName,
+    platform,
+    price, cost, shipping, packing, feeRate, fee, qty,
+    totalRevenue, totalCost, profit, profitRate
+  };
+
+  sales.push(entry);
+  saveSales();
+
+  // 在庫自動連動
+  const result = deductInventoryOnSale(productName, platform, qty);
+  let msg = '✅ 保存しました！';
+  if (!result.found) {
+    msg += `\n\n⚠️ 在庫連動なし\n「${productName}」が在庫管理に見つかりません。\n在庫管理タブの商品名と一致しているか確認してください。`;
+  } else if (result.shopMissing) {
+    msg += `\n\n⚠️ 在庫連動なし\n「${result.productName}」に「${platform}」の在庫枠がありません。\n在庫管理で編集し、${platform}の在庫を設定してください。\n（在庫あり：${result.available}）`;
+  } else {
+    msg += `\n📦 在庫を自動更新しました（${platform} 残り ${result.remaining}個）`;
+    if (result.remaining <= 3) msg += `\n⚠️ 在庫が少なくなっています！`;
+  }
+
+  clearInput();
+  alert(msg);
+}
+
+function clearInput() {
+  document.getElementById('in-date').value         = '';
+  document.getElementById('in-product-text').value = '';
+  document.getElementById('in-platform').value     = 'Amazon';
+  document.getElementById('in-price').value        = '';
+  document.getElementById('in-cost').value         = '';
+  document.getElementById('in-shipping').value     = '';
+  document.getElementById('in-packing').value      = '';
+  document.getElementById('in-fee-rate').value     = '0';
+  document.getElementById('in-fee').value          = '';
+  document.getElementById('in-qty').value          = '1';
+  calcRealtime();
+}
+
+// ===== LIST =====
+function renderList() {
+  const fromVal = document.getElementById('list-from').value;
+  const toVal = document.getElementById('list-to').value;
+  const platformVal = document.getElementById('list-platform').value;
+  const monthVal = document.getElementById('list-month').value;
+
+  filteredSales = sales.filter(s => {
+    if (fromVal && s.date < fromVal) return false;
+    if (toVal && s.date > toVal) return false;
+    if (platformVal && s.platform !== platformVal) return false;
+    if (monthVal && !s.date.startsWith(monthVal)) return false;
+    return true;
+  });
+
+  filteredSales.sort((a, b) => b.date.localeCompare(a.date));
+
+  const tbody = document.getElementById('sales-body');
+  const tfoot = document.getElementById('sales-foot');
+
+  if (filteredSales.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="13" class="empty"><div class="icon">📭</div>データがありません</td></tr>';
+    tfoot.innerHTML = '';
+    return;
+  }
+
+  // 各行：単価 / 合計の2段表示
+  function cellUnitTotal(unit, total) {
+    return `<div class="cell-unit">${yen(unit)}</div><div class="cell-total"><span class="cell-arrow">→</span>${yen(total)}</div>`;
+  }
+
+  tbody.innerHTML = filteredSales.map(s => `
+    <tr>
+      <td>${s.date}</td>
+      <td>${s.product}</td>
+      <td><span class="badge badge-${getBadgeClass(s.platform)}">${s.platform}</span></td>
+      <td>${cellUnitTotal(s.price, s.price * s.qty)}</td>
+      <td>${cellUnitTotal(s.cost, s.cost * s.qty)}</td>
+      <td><div class="cell-total">${yen(s.shipping)}</div></td>
+      <td>${cellUnitTotal(s.packing, s.packing * s.qty)}</td>
+      <td>${cellUnitTotal(s.fee, s.fee * s.qty)}<div class="cell-unit">${s.feeRate}%</div></td>
+      <td>${s.qty}</td>
+      <td>${yen(s.totalCost)}</td>
+      <td class="${s.profit >= 0 ? 'positive' : 'negative'}">${yen(s.profit)}</td>
+      <td class="${s.profitRate >= 0 ? 'positive' : 'negative'}">${pct(s.profitRate)}</td>
+      <td style="display:flex;gap:6px;">
+        <button class="btn btn-secondary" style="padding:5px 10px;font-size:0.8rem;" onclick="openEditEntryModal(${s.id})">✏️ 編集</button>
+        <button class="btn btn-danger" onclick="deleteEntry(${s.id})">削除</button>
+      </td>
+    </tr>
+  `).join('');
+
+  // 合計行
+  const sumRevenue  = filteredSales.reduce((a, s) => a + s.price * s.qty, 0);
+  const sumCost     = filteredSales.reduce((a, s) => a + s.cost * s.qty, 0);
+  const sumShipping = filteredSales.reduce((a, s) => a + s.shipping, 0);
+  const sumPacking  = filteredSales.reduce((a, s) => a + s.packing * s.qty, 0);
+  const sumFee      = filteredSales.reduce((a, s) => a + s.fee * s.qty, 0);
+  const sumQty      = filteredSales.reduce((a, s) => a + s.qty, 0);
+  const sumTotal    = filteredSales.reduce((a, s) => a + s.totalCost, 0);
+  const sumProfit   = filteredSales.reduce((a, s) => a + s.profit, 0);
+  const avgRate     = sumRevenue > 0 ? (sumProfit / sumRevenue) * 100 : 0;
+
+  tfoot.innerHTML = `
+    <tr>
+      <td colspan="3" style="color:var(--orange);font-weight:800;">📊 合計（${filteredSales.length}件）</td>
+      <td><span class="total-label">販売価格合計</span><span class="total-value">${yen(sumRevenue)}</span></td>
+      <td><span class="total-label">原価合計</span><span class="total-value">${yen(sumCost)}</span></td>
+      <td><span class="total-label">送料合計</span><span class="total-value">${yen(sumShipping)}</span></td>
+      <td><span class="total-label">梱包合計</span><span class="total-value">${yen(sumPacking)}</span></td>
+      <td><span class="total-label">手数料合計</span><span class="total-value">${yen(sumFee)}</span></td>
+      <td><span class="total-label">個数合計</span><span class="total-value">${sumQty}</span></td>
+      <td><span class="total-label">総コスト合計</span><span class="total-value">${yen(sumTotal)}</span></td>
+      <td class="${sumProfit >= 0 ? 'positive' : 'negative'}"><span class="total-label">利益合計</span>${yen(sumProfit)}</td>
+      <td class="${avgRate >= 0 ? 'positive' : 'negative'}"><span class="total-label">平均利益率</span>${pct(avgRate)}</td>
+      <td></td>
+    </tr>
+  `;
+}
+
+function openEditEntryModal(id) {
+  const s = sales.find(e => e.id === id);
+  if (!s) return;
+  document.getElementById('ee-id').value = id;
+  document.getElementById('ee-date').value = s.date;
+  document.getElementById('ee-product').value = s.product;
+  document.getElementById('ee-platform').value = s.platform;
+  document.getElementById('ee-price').value = s.price;
+  document.getElementById('ee-cost').value = s.cost;
+  document.getElementById('ee-shipping').value = s.shipping;
+  document.getElementById('ee-packing').value = s.packing;
+  document.getElementById('ee-fee-rate').value = s.feeRate;
+  document.getElementById('ee-fee').value = s.fee;
+  document.getElementById('ee-qty').value = s.qty;
+  calcEditRealtime();
+  document.getElementById('edit-entry-modal').style.display = 'flex';
+}
+
+function closeEditEntryModal(e) {
+  if (!e || e.target === document.getElementById('edit-entry-modal')) {
+    document.getElementById('edit-entry-modal').style.display = 'none';
+  }
+}
+
+function calcEditRealtime() {
+  const price = parseFloat(document.getElementById('ee-price').value) || 0;
+  const cost = parseFloat(document.getElementById('ee-cost').value) || 0;
+  const shipping = parseFloat(document.getElementById('ee-shipping').value) || 0;
+  const packing = parseFloat(document.getElementById('ee-packing').value) || 0;
+  const feeRate = parseFloat(document.getElementById('ee-fee-rate').value) || 0;
+  const qty = parseFloat(document.getElementById('ee-qty').value) || 1;
+  const fee = price * (feeRate / 100);
+  document.getElementById('ee-fee').value = Math.round(fee);
+  const totalCost = (cost + packing + fee) * qty + shipping;
+  const totalRevenue = price * qty;
+  const profit = totalRevenue - totalCost;
+  const rate = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+  document.getElementById('ee-rt-cost').textContent = yen(totalCost);
+  const profitEl = document.getElementById('ee-rt-profit');
+  profitEl.textContent = yen(profit);
+  profitEl.className = 'value ' + (profit >= 0 ? 'positive' : 'negative');
+  const rateEl = document.getElementById('ee-rt-rate');
+  rateEl.textContent = pct(rate);
+  rateEl.className = 'value ' + (rate >= 0 ? 'positive' : 'negative');
+}
+
+function saveEditEntry() {
+  const id = parseInt(document.getElementById('ee-id').value);
+  const idx = sales.findIndex(e => e.id === id);
+  if (idx === -1) return;
+  const price = parseFloat(document.getElementById('ee-price').value) || 0;
+  const cost = parseFloat(document.getElementById('ee-cost').value) || 0;
+  const shipping = parseFloat(document.getElementById('ee-shipping').value) || 0;
+  const packing = parseFloat(document.getElementById('ee-packing').value) || 0;
+  const feeRate = parseFloat(document.getElementById('ee-fee-rate').value) || 0;
+  const fee = price * (feeRate / 100);
+  const qty = parseFloat(document.getElementById('ee-qty').value) || 1;
+  const totalCost = (cost + packing + fee) * qty + shipping;
+  const totalRevenue = price * qty;
+  const profit = totalRevenue - totalCost;
+  const profitRate = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+  sales[idx] = {
+    ...sales[idx],
+    date: document.getElementById('ee-date').value,
+    product: document.getElementById('ee-product').value.trim() || sales[idx].product,
+    platform: document.getElementById('ee-platform').value,
+    price, cost, shipping, packing, feeRate, fee, qty,
+    totalRevenue, totalCost, profit, profitRate
+  };
+  saveSales();
+  closeEditEntryModal();
+  renderList();
+}
+
+function deleteEntry(id) {
+  if (!confirm('この売上データを削除しますか？')) return;
+  sales = sales.filter(s => s.id !== id);
+  saveSales();
+  renderList();
+}
+
+function clearListFilter() {
+  document.getElementById('list-from').value = '';
+  document.getElementById('list-to').value = '';
+  document.getElementById('list-platform').value = '';
+  document.getElementById('list-month').value = '';
+  renderList();
+}
+
+function getBadgeClass(platform) {
+  if (platform === 'Amazon')     return 'amazon';
+  if (platform === 'メルカリ')   return 'mercari';
+  if (platform === 'リベシティ市場') return 'libecity';
+  return 'other';
+}
+
+// ===== CSV EXPORT =====
+function exportCSV(mode) {
+  const data = mode === 'all' ? sales : filteredSales;
+  if (data.length === 0) { alert('データがありません'); return; }
+
+  const headers = [
+    '日付', '商品名', 'プラットフォーム',
+    '販売価格(単価)', '販売価格合計',
+    '原価(単価)', '原価合計',
+    '送料',
+    '梱包費(単価)', '梱包費合計',
+    '手数料率', '手数料(単価)', '手数料合計',
+    '個数', '総売上', '総コスト', '利益', '利益率'
+  ];
+
+  const rows = data.map(s => [
+    s.date, s.product, s.platform,
+    s.price, s.price * s.qty,
+    s.cost, s.cost * s.qty,
+    s.shipping,
+    s.packing, s.packing * s.qty,
+    s.feeRate + '%', Math.round(s.fee), Math.round(s.fee * s.qty),
+    s.qty, Math.round(s.totalRevenue), Math.round(s.totalCost),
+    Math.round(s.profit), s.profitRate.toFixed(2) + '%'
+  ]);
+
+  // 合計行
+  const sumRevenue  = data.reduce((a, s) => a + s.price * s.qty, 0);
+  const sumCost     = data.reduce((a, s) => a + s.cost * s.qty, 0);
+  const sumShipping = data.reduce((a, s) => a + s.shipping, 0);
+  const sumPacking  = data.reduce((a, s) => a + s.packing * s.qty, 0);
+  const sumFee      = data.reduce((a, s) => a + s.fee * s.qty, 0);
+  const sumQty      = data.reduce((a, s) => a + s.qty, 0);
+  const sumTotal    = data.reduce((a, s) => a + s.totalCost, 0);
+  const sumProfit   = data.reduce((a, s) => a + s.profit, 0);
+  const avgRate     = sumRevenue > 0 ? (sumProfit / sumRevenue) * 100 : 0;
+
+  const totalRow = [
+    `合計（${data.length}件）`, '', '',
+    '', Math.round(sumRevenue),
+    '', Math.round(sumCost),
+    Math.round(sumShipping),
+    '', Math.round(sumPacking),
+    '', '', Math.round(sumFee),
+    sumQty, Math.round(sumRevenue), Math.round(sumTotal),
+    Math.round(sumProfit), avgRate.toFixed(2) + '%'
+  ];
+
+  const csv = '\uFEFF' + [headers, ...rows, [], totalRow]
+    .map(r => r.map(v => `"${v}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `果物売上_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ===== MASTER =====
+function renderMaster() {
+  const grid = document.getElementById('master-grid');
+  if (products.length === 0) {
+    grid.innerHTML = '<div class="empty"><div class="icon">📦</div>商品が登録されていません</div>';
+    return;
+  }
+  grid.innerHTML = products.map((p, i) => `
+    <div class="product-card">
+      <div class="prod-name">🍎 ${p.name}</div>
+      <div class="prod-details">
+        <div>原価：<strong>${yen(p.cost)}</strong></div>
+        <div>送料：<strong>${yen(p.shipping)}</strong></div>
+        <div>梱包：<strong>${yen(p.packing)}</strong></div>
+      </div>
+      <div class="prod-prices">
+        ${p.priceAmazon  ? `<span class="price-badge amazon">🟠 ${yen(p.priceAmazon)}</span>` : ''}
+        ${p.priceMercari ? `<span class="price-badge mercari">🩷 ${yen(p.priceMercari)}</span>` : ''}
+        ${p.priceLibecity? `<span class="price-badge libecity">🟢 ${yen(p.priceLibecity)}</span>` : ''}
+      </div>
+      <div class="prod-actions">
+        <button class="btn btn-secondary btn-sm" onclick="openProductModal(${i})">✏️ 編集</button>
+        <button class="btn btn-danger" onclick="deleteProduct(${i})">削除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openProductModal(index) {
+  const modal = document.getElementById('product-modal');
+  const isEdit = index !== undefined;
+  document.getElementById('modal-title').textContent = isEdit ? '✏️ 商品編集' : '🛍️ 商品登録';
+  document.getElementById('edit-index').value = isEdit ? index : '';
+  if (isEdit) {
+    const p = products[index];
+    document.getElementById('m-name').value = p.name;
+    document.getElementById('m-cost').value = p.cost;
+    document.getElementById('m-shipping').value = p.shipping;
+    document.getElementById('m-packing').value = p.packing;
+    document.getElementById('m-price-amazon').value = p.priceAmazon || '';
+    document.getElementById('m-price-mercari').value = p.priceMercari || '';
+    document.getElementById('m-price-libecity').value = p.priceLibecity || '';
+  } else {
+    document.getElementById('m-name').value = '';
+    document.getElementById('m-cost').value = '';
+    document.getElementById('m-shipping').value = '';
+    document.getElementById('m-packing').value = '';
+    document.getElementById('m-price-amazon').value = '';
+    document.getElementById('m-price-mercari').value = '';
+    document.getElementById('m-price-libecity').value = '';
+  }
+  modal.style.display = 'flex';
+}
+
+function closeProductModal(e) {
+  if (!e || e.target === document.getElementById('product-modal')) {
+    document.getElementById('product-modal').style.display = 'none';
+  }
+}
+
+function saveProduct() {
+  const name = document.getElementById('m-name').value.trim();
+  if (!name) { alert('商品名を入力してください'); return; }
+  const p = {
+    name,
+    cost: parseFloat(document.getElementById('m-cost').value) || 0,
+    shipping: parseFloat(document.getElementById('m-shipping').value) || 0,
+    packing: parseFloat(document.getElementById('m-packing').value) || 0,
+    priceAmazon: parseFloat(document.getElementById('m-price-amazon').value) || 0,
+    priceMercari: parseFloat(document.getElementById('m-price-mercari').value) || 0,
+    priceLibecity: parseFloat(document.getElementById('m-price-libecity').value) || 0,
+  };
+  const editIndex = document.getElementById('edit-index').value;
+  if (editIndex !== '') {
+    products[parseInt(editIndex)] = p;
+  } else {
+    products.push(p);
+  }
+  saveProducts();
+  closeProductModal();
+  renderMaster();
+  populateProductSelect();
+}
+
+// ===== QUICK SALE =====
+function renderQuick() {
+  const grid = document.getElementById('quick-grid');
+  if (products.length === 0) {
+    grid.innerHTML = '<div class="quick-empty">商品マスターに商品を登録してください</div>';
+    return;
+  }
+  const inventory = JSON.parse(localStorage.getItem('fruits_inventory') || '[]');
+  grid.innerHTML = products.map((p, i) => {
+    const inv = inventory.find(v => v.productName === p.name);
+    const stocks = inv ? inv.stocks : {};
+    const stockText = inv
+      ? `Amazon:${stocks['Amazon']??0} / メルカリ:${stocks['メルカリ']??0} / リベシティ:${stocks['リベシティ市場']??0}`
+      : '在庫未登録';
+    const btns = [
+      { key: 'amazon',   label: '🟠 Amazon',       platform: 'Amazon',       price: p.priceAmazon   || 0 },
+      { key: 'mercari',  label: '🩷 メルカリ',      platform: 'メルカリ',      price: p.priceMercari  || 0 },
+      { key: 'libecity', label: '🟢 リベシティ市場', platform: 'リベシティ市場', price: p.priceLibecity || 0 },
+    ];
+    return `
+      <div class="quick-card">
+        <div class="qc-name">🍎 ${p.name}</div>
+        <div class="qc-stock">在庫 ${stockText}</div>
+        <div class="quick-btn-group">
+          ${btns.map(b => `
+            <button class="quick-btn ${b.key}" id="qbtn-${i}-${b.key}"
+              onclick="quickSale(${i}, '${b.platform}', '${b.key}')">
+              <span>${b.label}</span>
+              <span>${b.price ? yen(b.price) : '価格未設定'}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function quickSale(productIndex, platform, btnKey) {
+  const p = products[productIndex];
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const priceMap = { 'Amazon': p.priceAmazon||0, 'メルカリ': p.priceMercari||0, 'リベシティ市場': p.priceLibecity||0 };
+  const price = priceMap[platform] || 0;
+  const feeRate = platform === 'メルカリ' ? 10 : (platform === 'Amazon' ? 10 : 0);
+  const fee = price * feeRate / 100;
+  const totalRevenue = price;
+
+  // ×２表記なら在庫を2減らす
+  const isDouble = /×２|×2/.test(p.name);
+  const deductQty = isDouble ? 2 : 1;
+
+  const totalCost = p.cost + p.shipping + p.packing + fee;
+  const profit = totalRevenue - totalCost;
+  const profitRate = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+
+  // 売上記録
+  sales.push({ id: Date.now(), date: dateStr, product: p.name, platform, price, cost: p.cost, shipping: p.shipping, packing: p.packing, feeRate, fee, qty: 1, totalRevenue, totalCost, profit, profitRate });
+  saveSales();
+
+  // 在庫をdeductQty減らす
+  let inventory = JSON.parse(localStorage.getItem('fruits_inventory') || '[]');
+  const inv = inventory.find(v => v.productName === p.name);
+  if (inv && inv.stocks[platform] !== undefined) {
+    inv.stocks[platform] = Math.max(0, (inv.stocks[platform] || 0) - deductQty);
+    localStorage.setItem('fruits_inventory', JSON.stringify(inventory));
+  }
+
+  // 入出荷履歴
+  let history = JSON.parse(localStorage.getItem('fruits_stockHistory') || '[]');
+  history.unshift({ id: Date.now()+1, type: 'sale', productName: p.name, shop: platform, quantity: -deductQty, date: dateStr, note: `クイック売上${isDouble ? '（×2箱）' : ''}` });
+  localStorage.setItem('fruits_stockHistory', JSON.stringify(history));
+
+  // ボタンを一瞬グリーンに
+  const btn = document.getElementById(`qbtn-${productIndex}-${btnKey}`);
+  if (btn) {
+    const orig = btn.innerHTML;
+    btn.classList.add('done');
+    btn.innerHTML = '<span>✓ 記録しました</span><span></span>';
+    btn.disabled = true;
+    setTimeout(() => { btn.classList.remove('done'); btn.innerHTML = orig; btn.disabled = false; renderQuick(); }, 900);
+  }
+}
+
+function deleteProduct(index) {
+  if (!confirm(`「${products[index].name}」を削除しますか？`)) return;
+  products.splice(index, 1);
+  saveProducts();
+  renderMaster();
+  populateProductSelect();
+}
+
+// ===== DASHBOARD =====
+function renderDashboard() {
+  const data = filterByPeriod(sales);
+
+  // ── 1. サマリー統計 ──
+  const totalRevenue = data.reduce((s, e) => s + e.totalRevenue, 0);
+  const totalCost    = data.reduce((s, e) => s + e.totalCost, 0);
+  const totalProfit  = data.reduce((s, e) => s + e.profit, 0);
+  const avgProfit    = data.length > 0 ? totalProfit / data.length : 0;
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">💰 総売上</div>
+      <div class="stat-value">${yen(totalRevenue)}</div>
+      <div class="stat-sub">${data.length} 件</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">📈 総利益</div>
+      <div class="stat-value ${totalProfit >= 0 ? 'positive' : 'negative'}">${yen(totalProfit)}</div>
+      <div class="stat-sub">利益率 ${pct(totalRevenue > 0 ? (totalProfit/totalRevenue)*100 : 0)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">💸 総コスト</div>
+      <div class="stat-value">${yen(totalCost)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">📦 平均利益/件</div>
+      <div class="stat-value ${avgProfit >= 0 ? 'positive' : 'negative'}">${yen(avgProfit)}</div>
+    </div>
+  `;
+
+  // ── 2. プラットフォーム別（送料追加） ──
+  const platforms = ['Amazon', 'メルカリ', 'リベシティ市場', 'その他'];
+  const pColors   = ['amazon', 'mercari', 'libecity', 'other'];
+  const pIcons    = ['🟠', '🩷', '🟢', '🔵'];
+  document.getElementById('platform-grid').innerHTML = platforms.map((pl, i) => {
+    const pd  = data.filter(s => s.platform === pl);
+    const rev = pd.reduce((s, e) => s + e.totalRevenue, 0);
+    const prf = pd.reduce((s, e) => s + e.profit, 0);
+    const shp = pd.reduce((s, e) => s + e.shipping, 0);
+    return `
+      <div class="platform-card ${pColors[i]}">
+        <div class="name">${pIcons[i]} ${pl}</div>
+        <div class="nums">
+          <div>件数：<span>${pd.length} 件</span></div>
+          <div>売上：<span>${yen(rev)}</span></div>
+          <div>送料：<span>${yen(shp)}</span></div>
+          <div>利益：<span class="${prf >= 0 ? 'positive' : 'negative'}">${yen(prf)}</span></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // ── 3. コスト内訳（グラフより先に描画） ──
+  const sumCost     = data.reduce((s, e) => s + e.cost * e.qty, 0);
+  const sumShipping = data.reduce((s, e) => s + e.shipping, 0);
+  const sumPacking  = data.reduce((s, e) => s + e.packing * e.qty, 0);
+  const sumFee      = data.reduce((s, e) => s + e.fee * e.qty, 0);
+  document.getElementById('cost-breakdown').innerHTML = `
+    <div class="stat-card"><div class="stat-label">📦 原価合計</div><div class="stat-value">${yen(sumCost)}</div></div>
+    <div class="stat-card"><div class="stat-label">🚚 送料合計</div><div class="stat-value">${yen(sumShipping)}</div></div>
+    <div class="stat-card"><div class="stat-label">📦 梱包費合計</div><div class="stat-value">${yen(sumPacking)}</div></div>
+    <div class="stat-card"><div class="stat-label">💳 手数料合計</div><div class="stat-value">${yen(sumFee)}</div></div>
+  `;
+
+  // ── 4. 商品別利益詳細（グラフより先に描画） ──
+  const prodDetailMap = {};
+  data.forEach(s => {
+    if (!prodDetailMap[s.product]) {
+      prodDetailMap[s.product] = { count: 0, rev: 0, cost: 0, shipping: 0, packing: 0, fee: 0, profit: 0 };
+    }
+    const pd = prodDetailMap[s.product];
+    pd.count++;
+    pd.rev      += s.totalRevenue;
+    pd.cost     += s.cost * s.qty;
+    pd.shipping += s.shipping;
+    pd.packing  += s.packing * s.qty;
+    pd.fee      += s.fee * s.qty;
+    pd.profit   += s.profit;
+  });
+
+  const detailRows = Object.entries(prodDetailMap).sort((a, b) => b[1].profit - a[1].profit);
+  const detailBody = document.getElementById('product-detail-body');
+  if (detailRows.length === 0) {
+    detailBody.innerHTML = '<tr><td colspan="9" class="empty">データがありません</td></tr>';
+  } else {
+    detailBody.innerHTML = detailRows.map(([name, d]) => {
+      const rate = d.rev > 0 ? (d.profit / d.rev) * 100 : 0;
+      return `
+        <tr>
+          <td>${name}</td>
+          <td>${d.count}</td>
+          <td>${yen(d.rev)}</td>
+          <td>${yen(d.cost)}</td>
+          <td>${yen(d.shipping)}</td>
+          <td>${yen(d.packing)}</td>
+          <td>${yen(d.fee)}</td>
+          <td class="${d.profit >= 0 ? 'positive' : 'negative'}">${yen(d.profit)}</td>
+          <td class="${rate >= 0 ? 'positive' : 'negative'}">${pct(rate)}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // ── 5. グラフ（エラーが起きても上記の表示には影響しない） ──
+  // 商品別売上ランキング
+  try {
+    const productMap = {};
+    data.forEach(s => {
+      if (!productMap[s.product]) productMap[s.product] = 0;
+      productMap[s.product] += s.totalRevenue;
+    });
+    const sortedProducts = Object.entries(productMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
+
+    if (chartProduct) { chartProduct.destroy(); chartProduct = null; }
+    const canvas1 = document.getElementById('chart-product');
+    chartProduct = new Chart(canvas1, {
+      type: 'bar',
+      data: {
+        labels: sortedProducts.map(([k]) => k),
+        datasets: [{ label: '売上', data: sortedProducts.map(([, v]) => v), backgroundColor: '#f97316', borderRadius: 6 }]
+      },
+      options: {
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { callback: v => '¥' + v.toLocaleString(), font: { size: 11 } } },
+          y: { ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+  } catch(e) { console.warn('商品別グラフ描画エラー:', e); }
+
+  // 月別推移
+  try {
+    const monthlyMap = {};
+    sales.forEach(s => {
+      const ym = s.date.slice(0, 7);
+      if (!monthlyMap[ym]) monthlyMap[ym] = { rev: 0, profit: 0 };
+      monthlyMap[ym].rev    += s.totalRevenue;
+      monthlyMap[ym].profit += s.profit;
+    });
+    const months = Object.keys(monthlyMap).sort().slice(-12);
+
+    if (chartMonthly) { chartMonthly.destroy(); chartMonthly = null; }
+    const canvas2 = document.getElementById('chart-monthly');
+    chartMonthly = new Chart(canvas2, {
+      type: 'line',
+      data: {
+        labels: months,
+        datasets: [
+          { label: '売上', data: months.map(m => monthlyMap[m].rev), borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.12)', tension: 0.3, fill: true, pointRadius: 4 },
+          { label: '利益', data: months.map(m => monthlyMap[m].profit), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,0.08)', tension: 0.3, fill: true, pointRadius: 4 }
+        ]
+      },
+      options: {
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+        scales: {
+          y: { ticks: { callback: v => '¥' + v.toLocaleString(), font: { size: 11 } } },
+          x: { ticks: { font: { size: 10 } } }
+        }
+      }
+    });
+  } catch(e) { console.warn('月別グラフ描画エラー:', e); }
+}
+
+// ===== INVENTORY =====
+const SHOPS = ['メルカリ', 'Amazon', 'リベシティ市場'];
+
+let inventory    = JSON.parse(localStorage.getItem('fruits_inventory')    || '[]');
+let stockHistory = JSON.parse(localStorage.getItem('fruits_stockHistory') || '[]');
+
+function saveInventory() {
+  localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
+  localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
+  if (gasUrl) syncToCloud();
+}
+
+function getShopChip(shop) {
+  const cls = shop === 'メルカリ' ? 'shop-mercari'
+            : shop === 'Amazon'   ? 'shop-amazon'
+            : shop === 'リベシティ市場' ? 'shop-libecity'
+            : 'shop-other';
+  return `<span class="shop-chip ${cls}">${shop}</span>`;
+}
+
+function showInvTab(tab) {
+  document.getElementById('inv-stock-panel').style.display   = tab === 'stock'   ? '' : 'none';
+  document.getElementById('inv-history-panel').style.display = tab === 'history' ? '' : 'none';
+  if (tab === 'history') renderHistory();
+}
+
+// ── 在庫一覧 ──
+function renderInventory() {
+  // アラートチェック
+  const alerts = [];
+  inventory.forEach(item => {
+    SHOPS.forEach(shop => {
+      const qty = (item.stocks || {})[shop] || 0;
+      if (qty <= (item.alertThreshold || 3)) {
+        alerts.push({ name: item.productName, shop, qty });
+      }
+    });
+  });
+  const bar = document.getElementById('inv-alert-bar');
+  if (alerts.length > 0) {
+    bar.style.display = '';
+    document.getElementById('inv-alert-list').innerHTML = alerts.map(a =>
+      `<div class="inv-alert-item">⚠️ <strong>${a.name}</strong>${getShopChip(a.shop)} 残り <strong>${a.qty}個</strong></div>`
+    ).join('');
+  } else {
+    bar.style.display = 'none';
+  }
+
+  // 在庫テーブル
+  const tbody = document.getElementById('inv-table-body');
+  if (inventory.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty"><div class="icon">📦</div>在庫が登録されていません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = inventory.map(item => {
+    const s = item.stocks || {};
+    const total = SHOPS.reduce((a, sh) => a + (s[sh] || 0), 0);
+    const threshold = item.alertThreshold || 3;
+    const shopCells = SHOPS.map(sh => {
+      const qty = s[sh] || 0;
+      const low = qty <= threshold;
+      return `
+        <td>
+          <div class="inv-adj">
+            <button class="adj-btn" onclick="adjustStock('${item.id}','${sh}',-1)" title="-1">−</button>
+            <span class="inv-qty ${low ? 'low' : 'ok'}">${qty}</span>
+            <button class="adj-btn" onclick="adjustStock('${item.id}','${sh}',1)" title="+1">＋</button>
+          </div>
+        </td>`;
+    }).join('');
+    const ratio = item.conversionRatio || 1;
+    const ratioLabel = ratio > 1 ? `<span style="font-size:0.78rem;color:var(--orange);font-weight:700;">×${ratio}</span>` : `<span style="color:var(--text-muted);font-size:0.78rem;">—</span>`;
+    return `
+      <tr>
+        <td><strong>${item.productName}</strong></td>
+        ${shopCells}
+        <td style="text-align:center;font-weight:800;">${total}</td>
+        <td style="text-align:center;">${threshold}</td>
+        <td style="text-align:center;">${ratioLabel}</td>
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="openRestockModal('${item.id}')">📥 入荷</button>
+            <button class="btn btn-secondary btn-sm" onclick="openInvModal('${item.id}')">✏️</button>
+            <button class="btn btn-danger" onclick="deleteInventoryItem('${item.id}')">削除</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  // 履歴フィルターの商品名を更新
+  const sel = document.getElementById('hist-product-filter');
+  if (sel) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">すべて</option>' +
+      inventory.map(i => `<option value="${i.productName}"${i.productName===cur?' selected':''}>${i.productName}</option>`).join('');
+  }
+}
+
+// ── 手動±調整 ──
+function adjustStock(id, shop, delta) {
+  const item = inventory.find(i => i.id == id);
+  if (!item) return;
+  if (!item.stocks) item.stocks = {};
+  const before = item.stocks[shop] || 0;
+  item.stocks[shop] = Math.max(0, before + delta);
+  stockHistory.push({
+    id: Date.now(), date: new Date().toISOString().slice(0,10),
+    productName: item.productName, shop,
+    type: 'adjustment',
+    change: item.stocks[shop] - before,
+    after: item.stocks[shop],
+    note: '手動調整'
+  });
+  saveInventory();
+  renderInventory();
+}
+
+// ── 在庫登録・編集モーダル ──
+function openInvModal(id) {
+  const modal = document.getElementById('inv-modal');
+  document.getElementById('inv-edit-id').value = id || '';
+  if (id) {
+    const item = inventory.find(i => i.id == id);
+    document.getElementById('inv-modal-title').textContent  = '✏️ 在庫編集';
+    document.getElementById('inv-name').value               = item.productName;
+    document.getElementById('inv-mercari').value            = (item.stocks||{})['メルカリ'] || 0;
+    document.getElementById('inv-amazon').value             = (item.stocks||{})['Amazon']   || 0;
+    document.getElementById('inv-libecity').value           = (item.stocks||{})['リベシティ市場'] || 0;
+    document.getElementById('inv-threshold').value          = item.alertThreshold || 3;
+    document.getElementById('inv-conversion').value         = item.conversionRatio || 1;
+  } else {
+    document.getElementById('inv-modal-title').textContent  = '📦 在庫登録';
+    document.getElementById('inv-name').value               = '';
+    document.getElementById('inv-mercari').value            = '';
+    document.getElementById('inv-amazon').value             = '';
+    document.getElementById('inv-libecity').value           = '';
+    document.getElementById('inv-threshold').value          = '3';
+    document.getElementById('inv-conversion').value         = '1';
+  }
+  updateConversionPreview();
+  modal.style.display = 'flex';
+}
+function updateConversionPreview() {
+  const ratio = parseFloat(document.getElementById('inv-conversion').value) || 1;
+  const name  = document.getElementById('inv-name').value.trim() || '商品';
+  const el    = document.getElementById('inv-conversion-preview');
+  if (ratio === 1) {
+    el.textContent = '換算なし（入荷数＝販売数）';
+  } else {
+    el.textContent = `例：${name} 1入荷 → 販売単位 ${ratio}個分として在庫に加算されます`;
+  }
+}
+function closeInvModal(e) {
+  if (!e || e.target === document.getElementById('inv-modal'))
+    document.getElementById('inv-modal').style.display = 'none';
+}
+function saveInventoryItem() {
+  const name = document.getElementById('inv-name').value.trim();
+  if (!name) { alert('商品名を入力してください'); return; }
+  const editId = document.getElementById('inv-edit-id').value;
+  const stocks = {
+    'メルカリ':      parseInt(document.getElementById('inv-mercari').value)  || 0,
+    'Amazon':        parseInt(document.getElementById('inv-amazon').value)   || 0,
+    'リベシティ市場': parseInt(document.getElementById('inv-libecity').value) || 0,
+  };
+  const threshold      = parseInt(document.getElementById('inv-threshold').value)      || 3;
+  const conversionRatio = parseFloat(document.getElementById('inv-conversion').value) || 1;
+  if (editId) {
+    const item = inventory.find(i => i.id == editId);
+    if (item) { item.productName = name; item.stocks = stocks; item.alertThreshold = threshold; item.conversionRatio = conversionRatio; }
+  } else {
+    inventory.push({ id: Date.now(), productName: name, stocks, alertThreshold: threshold, conversionRatio });
+    SHOPS.forEach(sh => {
+      if (stocks[sh] > 0) {
+        stockHistory.push({
+          id: Date.now() + Math.random(),
+          date: new Date().toISOString().slice(0,10),
+          productName: name, shop: sh, type: 'restock',
+          change: stocks[sh], after: stocks[sh], note: '初期在庫'
+        });
+      }
+    });
+  }
+  saveInventory();
+  closeInvModal();
+  renderInventory();
+  populateProductSelect();
+}
+function deleteInventoryItem(id) {
+  const item = inventory.find(i => i.id == id);
+  if (!item || !confirm(`「${item.productName}」の在庫データを削除しますか？`)) return;
+  inventory = inventory.filter(i => i.id != id);
+  saveInventory();
+  renderInventory();
+}
+
+// ── 入荷登録モーダル ──
+function openRestockModal(id) {
+  const item = inventory.find(i => i.id == id);
+  document.getElementById('restock-id').value   = id;
+  document.getElementById('restock-name').value = item.productName;
+  document.getElementById('restock-qty').value  = '';
+  document.getElementById('restock-note').value = '';
+  // 換算倍率プレビューリセット
+  document.getElementById('restock-conversion-box').style.display = 'none';
+  document.getElementById('restock-modal').style.display = 'flex';
+}
+function updateRestockPreview() {
+  const id   = document.getElementById('restock-id').value;
+  const item = inventory.find(i => i.id == id);
+  const ratio = (item && item.conversionRatio) || 1;
+  const qty   = parseInt(document.getElementById('restock-qty').value) || 0;
+  const box   = document.getElementById('restock-conversion-box');
+  const text  = document.getElementById('restock-conversion-text');
+  if (ratio > 1 && qty > 0) {
+    box.style.display = '';
+    text.textContent = `入荷 ${qty} 個 → 販売単位 ${qty * ratio} 個 として在庫に加算されます`;
+  } else {
+    box.style.display = 'none';
+  }
+}
+function closeRestockModal(e) {
+  if (!e || e.target === document.getElementById('restock-modal'))
+    document.getElementById('restock-modal').style.display = 'none';
+}
+function saveRestock() {
+  const id    = document.getElementById('restock-id').value;
+  const shop  = document.getElementById('restock-shop').value;
+  const qty   = parseInt(document.getElementById('restock-qty').value) || 0;
+  const note  = document.getElementById('restock-note').value.trim();
+  if (qty <= 0) { alert('入荷数を1以上で入力してください'); return; }
+  const item = inventory.find(i => i.id == id);
+  if (!item) return;
+  if (!item.stocks) item.stocks = {};
+  const ratio = item.conversionRatio || 1;
+  const converted = Math.round(qty * ratio);
+  item.stocks[shop] = (item.stocks[shop] || 0) + converted;
+  const note2 = ratio > 1
+    ? `${note ? note + ' / ' : ''}入荷${qty}個→販売単位${converted}個換算`
+    : (note || '入荷');
+  stockHistory.push({
+    id: Date.now(), date: new Date().toISOString().slice(0,10),
+    productName: item.productName, shop, type: 'restock',
+    change: converted, after: item.stocks[shop], note: note2
+  });
+  saveInventory();
+  closeRestockModal();
+  renderInventory();
+  const msg = ratio > 1
+    ? `✅ ${item.productName}（${shop}）\n入荷 ${qty} 個 → 販売単位 ${converted} 個 を在庫に追加しました`
+    : `✅ ${item.productName}（${shop}）に ${converted}個 入荷しました`;
+  alert(msg);
+}
+
+// ── 履歴表示 ──
+function renderHistory() {
+  const pf = document.getElementById('hist-product-filter')?.value || '';
+  const tf = document.getElementById('hist-type-filter')?.value    || '';
+  let hist = [...stockHistory].reverse().filter(h => {
+    if (pf && h.productName !== pf) return false;
+    if (tf && h.type !== tf) return false;
+    return true;
+  });
+  const tbody = document.getElementById('hist-body');
+  if (!tbody) return;
+  if (hist.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">履歴がありません</td></tr>';
+    return;
+  }
+  const typeLabel = { sale: '売上', restock: '入荷', adjustment: '手動調整' };
+  const typeClass = { sale: 'hist-type-sale', restock: 'hist-type-restock', adjustment: 'hist-type-adj' };
+  tbody.innerHTML = hist.slice(0, 100).map(h => `
+    <tr>
+      <td>${h.date}</td>
+      <td>${h.productName}</td>
+      <td>${getShopChip(h.shop)}</td>
+      <td class="${typeClass[h.type]||''}">${typeLabel[h.type]||h.type}</td>
+      <td class="${h.change >= 0 ? 'positive' : 'negative'}">${h.change >= 0 ? '+' : ''}${h.change}</td>
+      <td>${h.after}</td>
+      <td style="color:var(--text-muted);font-size:0.82rem;">${h.note||''}</td>
+    </tr>
+  `).join('');
+}
+
+// ── 4/13 売上データ一括登録（1回限り） ──
+function injectApril13Sales() {
+  if (localStorage.getItem('fruits_april13_injected')) return;
+  const mk = (id, prod, price, cost, shipping, feeRate) => {
+    const fee = Math.round(price * (feeRate / 100));
+    const qty = 1;
+    const totalRevenue = price * qty;
+    const totalCost = (cost + 0 + fee) * qty + shipping;
+    const profit = totalRevenue - totalCost;
+    const profitRate = totalRevenue > 0 ? Math.round(profit / totalRevenue * 1000) / 10 : 0;
+    return { id, date: '2026-04-13', product: prod, platform: 'メルカリ',
+             price, cost, shipping, packing: 0, feeRate, fee, qty,
+             totalRevenue, totalCost, profit, profitRate };
+  };
+  const entries = [
+    mk(Date.now() + 1, '不知火 5kg【訳あり】',  2580, 648,  990,  10),
+    mk(Date.now() + 2, '不知火 10kg【訳あり】', 3990, 1296, 1050, 10),
+    mk(Date.now() + 3, '不知火 10kg【訳あり】', 3990, 1296, 1050, 10),
+  ];
+  sales.push(...entries);
+  saveSales();
+  localStorage.setItem('fruits_april13_injected', '1');
+}
+
+// ── 在庫データの旧キー（その他）をリベシティ市場へ移行 ──
+function migrateInventoryShopKeys() {
+  let changed = false;
+  inventory.forEach(item => {
+    if (item.stocks && 'その他' in item.stocks) {
+      const v = item.stocks['その他'];
+      if (!item.stocks['リベシティ市場']) item.stocks['リベシティ市場'] = 0;
+      item.stocks['リベシティ市場'] += v;
+      delete item.stocks['その他'];
+      changed = true;
+    }
+  });
+  if (changed) saveInventory();
+}
+
+// ── 売上登録時に在庫を自動で減らす ──
+function deductInventoryOnSale(productName, shop, qty) {
+  const normalize = s => s.trim().replace(/\s+/g, ' ');
+  const normTarget = normalize(productName);
+  const item = inventory.find(i => normalize(i.productName) === normTarget);
+  if (!item) return { found: false };
+  if (!item.stocks) item.stocks = {};
+  // ショップキーが存在しない場合
+  if (!(shop in item.stocks)) {
+    const available = Object.keys(item.stocks).filter(k => item.stocks[k] > 0).join('、') || 'なし';
+    return { found: true, shopMissing: true, productName: item.productName, available };
+  }
+  const before = item.stocks[shop] || 0;
+  const deduct = Math.min(qty, before);
+  item.stocks[shop] = Math.round((before - deduct) * 100) / 100;
+  if (deduct > 0) {
+    stockHistory.push({
+      id: Date.now(), date: new Date().toISOString().slice(0,10),
+      productName: item.productName, shop, type: 'sale',
+      change: -deduct, after: item.stocks[shop],
+      note: '売上連動（自動）'
+    });
+    saveInventory();
+  }
+  return { found: true, shopMissing: false, remaining: item.stocks[shop] };
+}
+
+// ===== INIT =====
+window.addEventListener('DOMContentLoaded', () => {
+  // 旧データ（その他→リベシティ市場）マイグレーション
+  migrateInventoryShopKeys();
+  // 4/13売上データ自動登録（1回限り）
+  injectApril13Sales();
+  // 配送料マスターのドロップダウンを初期化
+  populateShippingSelect();
+
+  // タブパネルの初期表示設定
+  document.querySelectorAll('.tab-panel').forEach(p => { p.style.display = 'none'; });
+  document.getElementById('tab-dashboard').style.display = 'block';
+
+  populateProductSelect();
+  document.getElementById('in-date').value = new Date().toISOString().slice(0, 10);
+  renderDashboard();
+  renderMaster();
+
+  // GAS URL が設定済みならステータス表示
+  if (gasUrl) {
+    setSyncStatus('success', '同期設定済み');
+  }
+});
+</script>
+</body>
+</html>
