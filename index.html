@@ -1096,7 +1096,7 @@ let currentPeriod = 'thisMonth';
 let dashFrom = null, dashTo = null;
 let filteredSales = [];
 let chartProduct = null, chartMonthly = null;
-let gasUrl       = localStorage.getItem('fruits_gasUrl') || '';
+var gasUrl       = localStorage.getItem('fruits_gasUrl') || '';
 let shippingRates = JSON.parse(localStorage.getItem('fruits_shippingRates') || '[]');
 function saveShippingRates() { localStorage.setItem('fruits_shippingRates', JSON.stringify(shippingRates)); }
 
