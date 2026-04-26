@@ -1148,7 +1148,19 @@ function saveGasUrl() {
   localStorage.setItem('fruits_gasUrl', gasUrl);
   document.getElementById('gas-url-status').innerHTML =
     '<span style="color:var(--green);">✅ URLを保存しました。接続テスト中...</span>';
-  syncToCloud();
+  // URL保存時はデータを上書きしない（接続確認のみ）
+  fetch(gasUrl + '?t=' + Date.now())
+    .then(r => r.json())
+    .then(data => {
+      const count = data.sales ? data.sales.length : 0;
+      document.getElementById('gas-url-status').innerHTML =
+        `<span style="color:var(--green);">✅ 接続成功（クラウド: 売上${count}件）</span>`;
+      setSyncStatus('success', '接続確認済み');
+    })
+    .catch(() => {
+      document.getElementById('gas-url-status').innerHTML =
+        '<span style="color:var(--red);">❌ 接続できませんでした。URLを確認してください。</span>';
+    });
 }
 
 function clearGasUrl() {
