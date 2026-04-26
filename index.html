@@ -1872,20 +1872,21 @@ function quickSale(productIndex, platform, btnKey) {
 
   // 売上記録
   sales.push({ id: Date.now(), date: dateStr, product: p.name, platform, price, cost: p.cost, shipping: p.shipping, packing: p.packing, feeRate, fee, qty: 1, totalRevenue, totalCost, profit, profitRate });
-  saveSales();
+  localStorage.setItem('fruits_sales', JSON.stringify(sales));
 
-  // 在庫をdeductQty減らす
-  let inventory = JSON.parse(localStorage.getItem('fruits_inventory') || '[]');
+  // 在庫をdeductQty減らす（グローバル変数を更新）
   const inv = inventory.find(v => v.productName === p.name);
   if (inv && inv.stocks[platform] !== undefined) {
     inv.stocks[platform] = Math.max(0, (inv.stocks[platform] || 0) - deductQty);
-    localStorage.setItem('fruits_inventory', JSON.stringify(inventory));
   }
+  localStorage.setItem('fruits_inventory', JSON.stringify(inventory));
 
-  // 入出荷履歴
-  let history = JSON.parse(localStorage.getItem('fruits_stockHistory') || '[]');
-  history.unshift({ id: Date.now()+1, type: 'sale', productName: p.name, shop: platform, quantity: -deductQty, date: dateStr, note: `クイック売上${isDouble ? '（×2箱）' : ''}` });
-  localStorage.setItem('fruits_stockHistory', JSON.stringify(history));
+  // 入出荷履歴（グローバル変数を更新）
+  stockHistory.unshift({ id: Date.now()+1, type: 'sale', productName: p.name, shop: platform, quantity: -deductQty, date: dateStr, note: `クイック売上${isDouble ? '（×2箱）' : ''}` });
+  localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
+
+  // 全データをまとめてクラウド同期
+  if (gasUrl) syncToCloud();
 
   // ボタンを一瞬グリーンに
   const btn = document.getElementById(`qbtn-${productIndex}-${btnKey}`);
@@ -2443,6 +2444,30 @@ window.addEventListener('DOMContentLoaded', () => {
   // GAS URL が設定済みならステータス表示
   if (gasUrl) {
     setSyncStatus('success', '同期設定済み');
+  }
+});
+
+// タブ/ウィンドウがアクティブになったとき自動でクラウドからデータ取得
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && gasUrl) {
+    fetch(gasUrl + '?t=' + Date.now())
+      .then(r => r.json())
+      .then(data => {
+        if (!data.sales) return;
+        sales        = data.sales        || [];
+        products     = data.products     || [];
+        inventory    = data.inventory    || [];
+        stockHistory = data.stockHistory || [];
+        localStorage.setItem('fruits_sales',        JSON.stringify(sales));
+        localStorage.setItem('fruits_products',     JSON.stringify(products));
+        localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
+        localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
+        renderDashboard();
+        renderMaster();
+        renderQuick();
+        setSyncStatus('success', '自動同期完了');
+      })
+      .catch(() => {});
   }
 });
 </script>
