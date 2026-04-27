@@ -289,24 +289,19 @@
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.4);
     z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 12px;
+    overflow-y: scroll;
+    -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
   }
   .modal {
     background: white;
     border-radius: 16px;
     padding: 20px 16px;
-    width: 100%;
+    width: calc(100% - 24px);
     max-width: 520px;
-    max-height: calc(100vh - 24px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
     box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     box-sizing: border-box;
-    position: relative;
+    margin: 12px auto 24px;
   }
   .modal h3 { font-size: 1.05rem; font-weight: 700; color: var(--orange); margin-bottom: 18px; }
   .modal .form-grid { grid-template-columns: 1fr; }
