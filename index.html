@@ -291,21 +291,25 @@
     z-index: 1000;
     overflow-y: scroll;
     -webkit-overflow-scrolling: touch;
-    padding: 16px;
+    padding: 12px;
   }
   .modal {
     background: white;
     border-radius: 16px;
-    padding: 24px;
+    padding: 20px 16px;
     width: 100%;
-    max-width: 480px;
+    max-width: 520px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     margin: 0 auto;
     position: relative;
+    box-sizing: border-box;
   }
   .modal h3 { font-size: 1.05rem; font-weight: 700; color: var(--orange); margin-bottom: 18px; }
-  .modal .form-grid { grid-template-columns: 1fr 1fr; }
+  .modal .form-grid { grid-template-columns: 1fr; }
   .modal .btn-group { margin-top: 18px; justify-content: flex-end; }
+  @media (min-width: 560px) {
+    .modal .form-grid { grid-template-columns: 1fr 1fr; }
+  }
 
   /* Profit color */
   .positive { color: var(--green); font-weight: 700; }
