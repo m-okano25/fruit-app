@@ -288,11 +288,10 @@
   .modal-overlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.4);
-    display: flex; align-items: flex-start; justify-content: center;
     z-index: 1000;
-    padding: 16px;
-    overflow-y: auto;
+    overflow-y: scroll;
     -webkit-overflow-scrolling: touch;
+    padding: 16px;
   }
   .modal {
     background: white;
@@ -301,7 +300,8 @@
     width: 100%;
     max-width: 480px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-    margin: auto;
+    margin: 0 auto;
+    position: relative;
   }
   .modal h3 { font-size: 1.05rem; font-weight: 700; color: var(--orange); margin-bottom: 18px; }
   .modal .form-grid { grid-template-columns: 1fr 1fr; }
