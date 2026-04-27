@@ -289,7 +289,11 @@
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.4);
     z-index: 1000;
-    overflow-y: scroll;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 16px;
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
   }
@@ -297,12 +301,15 @@
     background: white;
     border-radius: 16px;
     padding: 20px 16px;
-    width: calc(100% - 24px);
+    width: 100%;
     max-width: 520px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     box-sizing: border-box;
-    margin: 12px auto 24px;
+    flex-shrink: 0;
+    overflow: visible;
+    margin-bottom: 16px;
   }
+  body.modal-open { overflow: hidden; position: fixed; width: 100%; }
   .modal h3 { font-size: 1.05rem; font-weight: 700; color: var(--orange); margin-bottom: 18px; }
   .modal .form-grid { grid-template-columns: 1fr; }
   .modal .btn-group { margin-top: 18px; justify-content: flex-end; }
@@ -1149,6 +1156,20 @@ function saveSales() {
   if (gasUrl && cloudSynced) syncToCloud();
 }
 
+// ===== MODAL HELPERS =====
+function openModal(id) {
+  window._savedScrollY = window.scrollY;
+  document.body.style.top = `-${window._savedScrollY}px`;
+  document.body.classList.add('modal-open');
+  document.getElementById(id).style.display = 'flex';
+}
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+  document.body.classList.remove('modal-open');
+  document.body.style.top = '';
+  window.scrollTo(0, window._savedScrollY || 0);
+}
+
 // ===== TABS =====
 function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => { p.classList.remove('active'); p.style.display = 'none'; });
@@ -1661,7 +1682,7 @@ function openEditEntryModal(id) {
   document.getElementById('ee-qty').value = s.qty;
   updateEeShippingUI(s.platform);
   calcEditRealtime();
-  document.getElementById('edit-entry-modal').style.display = 'flex';
+  openModal('edit-entry-modal');
 }
 
 function updateEeShippingUI(platform) {
@@ -1708,7 +1729,7 @@ function applyEeSagawaRate() {
 
 function closeEditEntryModal(e) {
   if (!e || e.target === document.getElementById('edit-entry-modal')) {
-    document.getElementById('edit-entry-modal').style.display = 'none';
+    closeModal('edit-entry-modal');
   }
 }
 
@@ -1896,12 +1917,12 @@ function openProductModal(index) {
     document.getElementById('m-price-mercari').value = '';
     document.getElementById('m-price-libecity').value = '';
   }
-  modal.style.display = 'flex';
+  openModal('product-modal');
 }
 
 function closeProductModal(e) {
   if (!e || e.target === document.getElementById('product-modal')) {
-    document.getElementById('product-modal').style.display = 'none';
+    closeModal('product-modal');
   }
 }
 
@@ -2303,7 +2324,7 @@ function openInvModal(id) {
     document.getElementById('inv-conversion').value = '1';
   }
   updateConversionPreview();
-  modal.style.display = 'flex';
+  openModal('inv-modal');
 }
 function updateConversionPreview() {
   const ratio = parseFloat(document.getElementById('inv-conversion').value) || 1;
@@ -2317,7 +2338,7 @@ function updateConversionPreview() {
 }
 function closeInvModal(e) {
   if (!e || e.target === document.getElementById('inv-modal'))
-    document.getElementById('inv-modal').style.display = 'none';
+    closeModal('inv-modal');
 }
 function saveInventoryItem() {
   const name = document.getElementById('inv-name').value.trim();
@@ -2361,7 +2382,7 @@ function openRestockModal(id) {
   document.getElementById('restock-qty').value  = '';
   document.getElementById('restock-note').value = '';
   document.getElementById('restock-conversion-box').style.display = 'none';
-  document.getElementById('restock-modal').style.display = 'flex';
+  openModal('restock-modal');
 }
 function updateRestockPreview() {
   const id   = document.getElementById('restock-id').value;
@@ -2379,7 +2400,7 @@ function updateRestockPreview() {
 }
 function closeRestockModal(e) {
   if (!e || e.target === document.getElementById('restock-modal'))
-    document.getElementById('restock-modal').style.display = 'none';
+    closeModal('restock-modal');
 }
 function saveRestock() {
   const id  = document.getElementById('restock-id').value;
