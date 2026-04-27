@@ -756,12 +756,8 @@
           <thead>
             <tr>
               <th>商品名</th>
-              <th>🩷 メルカリ</th>
-              <th>🟠 Amazon</th>
-              <th>🟢 リベシティ市場</th>
-              <th>合計</th>
+              <th>在庫数</th>
               <th>アラート閾値</th>
-              <th>換算倍率</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -814,17 +810,9 @@
         <label>商品名 *</label>
         <input type="text" id="inv-name" placeholder="例：みかん 5kg">
       </div>
-      <div class="form-group">
-        <label>🩷 メルカリ 在庫数</label>
-        <input type="number" id="inv-mercari" placeholder="0" min="0">
-      </div>
-      <div class="form-group">
-        <label>🟠 Amazon 在庫数</label>
-        <input type="number" id="inv-amazon" placeholder="0" min="0">
-      </div>
       <div class="form-group" style="grid-column:1/-1;">
-        <label>🟢 リベシティ市場 在庫数</label>
-        <input type="number" id="inv-libecity" placeholder="0" min="0">
+        <label>📦 在庫数</label>
+        <input type="number" id="inv-stock" placeholder="0" min="0">
       </div>
       <div class="form-group" style="grid-column:1/-1;">
         <label>⚠️ アラート閾値（この数以下で警告）</label>
@@ -852,14 +840,6 @@
       <div class="form-group">
         <label>商品名</label>
         <input type="text" id="restock-name" readonly style="background:var(--orange-pale);">
-      </div>
-      <div class="form-group">
-        <label>ショップ</label>
-        <select id="restock-shop">
-          <option value="メルカリ">🩷 メルカリ</option>
-          <option value="Amazon">🟠 Amazon</option>
-          <option value="リベシティ市場">🟢 リベシティ市場</option>
-        </select>
       </div>
       <div class="form-group">
         <label>入荷数 <span id="restock-unit-label" style="font-size:0.75rem;color:var(--text-muted);"></span></label>
@@ -1090,6 +1070,16 @@ if (products.length === 0) {
     { name: 'いちご 1パック', cost: 500, shipping: 350, packing: 60 },
   ];
   saveProducts();
+}
+
+// 商品名から基本名を抽出（×N部分を除去）
+function getBaseProductName(name) {
+  return name.replace(/\s*×\s*\d+[箱個玉]*/gi, '').trim();
+}
+// 商品名から箱数倍率を取得
+function getBoxMultiplier(name) {
+  const m = name.match(/×\s*(\d+)/);
+  return m ? parseInt(m[1]) : 1;
 }
 
 let currentPeriod = 'thisMonth';
@@ -1839,13 +1829,10 @@ function renderQuick() {
     grid.innerHTML = '<div class="quick-empty">商品マスターに商品を登録してください</div>';
     return;
   }
-  const inventory = JSON.parse(localStorage.getItem('fruits_inventory') || '[]');
   grid.innerHTML = products.map((p, i) => {
-    const inv = inventory.find(v => v.productName === p.name);
-    const stocks = inv ? inv.stocks : {};
-    const stockText = inv
-      ? `Amazon:${stocks['Amazon']??0} / メルカリ:${stocks['メルカリ']??0} / リベシティ:${stocks['リベシティ市場']??0}`
-      : '在庫未登録';
+    const baseName = getBaseProductName(p.name);
+    const inv = inventory.find(v => v.productName === baseName) || inventory.find(v => v.productName === p.name);
+    const stockText = inv ? `在庫: ${inv.stock || 0} 個` : '在庫未登録';
     const btns = [
       { key: 'amazon',   label: '🟠 Amazon',       platform: 'Amazon',       price: p.priceAmazon   || 0 },
       { key: 'mercari',  label: '🩷 メルカリ',      platform: 'メルカリ',      price: p.priceMercari  || 0 },
@@ -1878,9 +1865,8 @@ function quickSale(productIndex, platform, btnKey) {
   const fee = price * feeRate / 100;
   const totalRevenue = price;
 
-  // ×２表記なら在庫を2減らす
-  const isDouble = /×２|×2/.test(p.name);
-  const deductQty = isDouble ? 2 : 1;
+  const deductQty = getBoxMultiplier(p.name);
+  const isDouble = deductQty > 1;
 
   const totalCost = p.cost + p.shipping + p.packing + fee;
   const profit = totalRevenue - totalCost;
@@ -1891,9 +1877,10 @@ function quickSale(productIndex, platform, btnKey) {
   localStorage.setItem('fruits_sales', JSON.stringify(sales));
 
   // 在庫をdeductQty減らす（グローバル変数を更新）
-  const inv = inventory.find(v => v.productName === p.name);
-  if (inv && inv.stocks[platform] !== undefined) {
-    inv.stocks[platform] = Math.max(0, (inv.stocks[platform] || 0) - deductQty);
+  const baseName = getBaseProductName(p.name);
+  const inv = inventory.find(v => v.productName === baseName) || inventory.find(v => v.productName === p.name);
+  if (inv) {
+    inv.stock = Math.max(0, (inv.stock || 0) - deductQty);
   }
   localStorage.setItem('fruits_inventory', JSON.stringify(inventory));
 
@@ -2117,57 +2104,43 @@ function showInvTab(tab) {
 
 // ── 在庫一覧 ──
 function renderInventory() {
-  // アラートチェック
   const alerts = [];
   inventory.forEach(item => {
-    SHOPS.forEach(shop => {
-      const qty = (item.stocks || {})[shop] || 0;
-      if (qty <= (item.alertThreshold || 3)) {
-        alerts.push({ name: item.productName, shop, qty });
-      }
-    });
+    const qty = item.stock || 0;
+    if (qty <= (item.alertThreshold || 3)) {
+      alerts.push({ name: item.productName, qty });
+    }
   });
   const bar = document.getElementById('inv-alert-bar');
   if (alerts.length > 0) {
     bar.style.display = '';
     document.getElementById('inv-alert-list').innerHTML = alerts.map(a =>
-      `<div class="inv-alert-item">⚠️ <strong>${a.name}</strong>${getShopChip(a.shop)} 残り <strong>${a.qty}個</strong></div>`
+      `<div class="inv-alert-item">⚠️ <strong>${a.name}</strong> 残り <strong>${a.qty}個</strong></div>`
     ).join('');
   } else {
     bar.style.display = 'none';
   }
 
-  // 在庫テーブル
   const tbody = document.getElementById('inv-table-body');
   if (inventory.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty"><div class="icon">📦</div>在庫が登録されていません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="empty"><div class="icon">📦</div>在庫が登録されていません</td></tr>';
     return;
   }
   tbody.innerHTML = inventory.map(item => {
-    const s = item.stocks || {};
-    const total = SHOPS.reduce((a, sh) => a + (s[sh] || 0), 0);
+    const qty = item.stock || 0;
     const threshold = item.alertThreshold || 3;
-    const shopCells = SHOPS.map(sh => {
-      const qty = s[sh] || 0;
-      const low = qty <= threshold;
-      return `
-        <td>
-          <div class="inv-adj">
-            <button class="adj-btn" onclick="adjustStock('${item.id}','${sh}',-1)" title="-1">−</button>
-            <span class="inv-qty ${low ? 'low' : 'ok'}">${qty}</span>
-            <button class="adj-btn" onclick="adjustStock('${item.id}','${sh}',1)" title="+1">＋</button>
-          </div>
-        </td>`;
-    }).join('');
-    const ratio = item.conversionRatio || 1;
-    const ratioLabel = ratio > 1 ? `<span style="font-size:0.78rem;color:var(--orange);font-weight:700;">×${ratio}</span>` : `<span style="color:var(--text-muted);font-size:0.78rem;">—</span>`;
+    const low = qty <= threshold;
     return `
       <tr>
         <td><strong>${item.productName}</strong></td>
-        ${shopCells}
-        <td style="text-align:center;font-weight:800;">${total}</td>
+        <td>
+          <div class="inv-adj">
+            <button class="adj-btn" onclick="adjustStock('${item.id}',-1)" title="-1">−</button>
+            <span class="inv-qty ${low ? 'low' : 'ok'}">${qty}</span>
+            <button class="adj-btn" onclick="adjustStock('${item.id}',1)" title="+1">＋</button>
+          </div>
+        </td>
         <td style="text-align:center;">${threshold}</td>
-        <td style="text-align:center;">${ratioLabel}</td>
         <td>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" onclick="openRestockModal('${item.id}')">📥 入荷</button>
@@ -2178,7 +2151,6 @@ function renderInventory() {
       </tr>`;
   }).join('');
 
-  // 履歴フィルターの商品名を更新
   const sel = document.getElementById('hist-product-filter');
   if (sel) {
     const cur = sel.value;
@@ -2188,18 +2160,17 @@ function renderInventory() {
 }
 
 // ── 手動±調整 ──
-function adjustStock(id, shop, delta) {
+function adjustStock(id, delta) {
   const item = inventory.find(i => i.id == id);
   if (!item) return;
-  if (!item.stocks) item.stocks = {};
-  const before = item.stocks[shop] || 0;
-  item.stocks[shop] = Math.max(0, before + delta);
+  const before = item.stock || 0;
+  item.stock = Math.max(0, before + delta);
   stockHistory.push({
     id: Date.now(), date: new Date().toISOString().slice(0,10),
-    productName: item.productName, shop,
+    productName: item.productName, shop: 'すべて',
     type: 'adjustment',
-    change: item.stocks[shop] - before,
-    after: item.stocks[shop],
+    change: item.stock - before,
+    after: item.stock,
     note: '手動調整'
   });
   saveInventory();
@@ -2212,21 +2183,17 @@ function openInvModal(id) {
   document.getElementById('inv-edit-id').value = id || '';
   if (id) {
     const item = inventory.find(i => i.id == id);
-    document.getElementById('inv-modal-title').textContent  = '✏️ 在庫編集';
-    document.getElementById('inv-name').value               = item.productName;
-    document.getElementById('inv-mercari').value            = (item.stocks||{})['メルカリ'] || 0;
-    document.getElementById('inv-amazon').value             = (item.stocks||{})['Amazon']   || 0;
-    document.getElementById('inv-libecity').value           = (item.stocks||{})['リベシティ市場'] || 0;
-    document.getElementById('inv-threshold').value          = item.alertThreshold || 3;
-    document.getElementById('inv-conversion').value         = item.conversionRatio || 1;
+    document.getElementById('inv-modal-title').textContent = '✏️ 在庫編集';
+    document.getElementById('inv-name').value      = item.productName;
+    document.getElementById('inv-stock').value     = item.stock || 0;
+    document.getElementById('inv-threshold').value = item.alertThreshold || 3;
+    document.getElementById('inv-conversion').value = item.conversionRatio || 1;
   } else {
-    document.getElementById('inv-modal-title').textContent  = '📦 在庫登録';
-    document.getElementById('inv-name').value               = '';
-    document.getElementById('inv-mercari').value            = '';
-    document.getElementById('inv-amazon').value             = '';
-    document.getElementById('inv-libecity').value           = '';
-    document.getElementById('inv-threshold').value          = '3';
-    document.getElementById('inv-conversion').value         = '1';
+    document.getElementById('inv-modal-title').textContent = '📦 在庫登録';
+    document.getElementById('inv-name').value      = '';
+    document.getElementById('inv-stock').value     = '';
+    document.getElementById('inv-threshold').value = '3';
+    document.getElementById('inv-conversion').value = '1';
   }
   updateConversionPreview();
   modal.style.display = 'flex';
@@ -2249,28 +2216,22 @@ function saveInventoryItem() {
   const name = document.getElementById('inv-name').value.trim();
   if (!name) { alert('商品名を入力してください'); return; }
   const editId = document.getElementById('inv-edit-id').value;
-  const stocks = {
-    'メルカリ':      parseInt(document.getElementById('inv-mercari').value)  || 0,
-    'Amazon':        parseInt(document.getElementById('inv-amazon').value)   || 0,
-    'リベシティ市場': parseInt(document.getElementById('inv-libecity').value) || 0,
-  };
-  const threshold      = parseInt(document.getElementById('inv-threshold').value)      || 3;
+  const stock = parseInt(document.getElementById('inv-stock').value) || 0;
+  const threshold = parseInt(document.getElementById('inv-threshold').value) || 3;
   const conversionRatio = parseFloat(document.getElementById('inv-conversion').value) || 1;
   if (editId) {
     const item = inventory.find(i => i.id == editId);
-    if (item) { item.productName = name; item.stocks = stocks; item.alertThreshold = threshold; item.conversionRatio = conversionRatio; }
+    if (item) { item.productName = name; item.stock = stock; item.alertThreshold = threshold; item.conversionRatio = conversionRatio; }
   } else {
-    inventory.push({ id: Date.now(), productName: name, stocks, alertThreshold: threshold, conversionRatio });
-    SHOPS.forEach(sh => {
-      if (stocks[sh] > 0) {
-        stockHistory.push({
-          id: Date.now() + Math.random(),
-          date: new Date().toISOString().slice(0,10),
-          productName: name, shop: sh, type: 'restock',
-          change: stocks[sh], after: stocks[sh], note: '初期在庫'
-        });
-      }
-    });
+    inventory.push({ id: Date.now(), productName: name, stock, alertThreshold: threshold, conversionRatio });
+    if (stock > 0) {
+      stockHistory.push({
+        id: Date.now() + Math.random(),
+        date: new Date().toISOString().slice(0,10),
+        productName: name, shop: 'すべて', type: 'restock',
+        change: stock, after: stock, note: '初期在庫'
+      });
+    }
   }
   saveInventory();
   closeInvModal();
@@ -2292,7 +2253,6 @@ function openRestockModal(id) {
   document.getElementById('restock-name').value = item.productName;
   document.getElementById('restock-qty').value  = '';
   document.getElementById('restock-note').value = '';
-  // 換算倍率プレビューリセット
   document.getElementById('restock-conversion-box').style.display = 'none';
   document.getElementById('restock-modal').style.display = 'flex';
 }
@@ -2315,31 +2275,29 @@ function closeRestockModal(e) {
     document.getElementById('restock-modal').style.display = 'none';
 }
 function saveRestock() {
-  const id    = document.getElementById('restock-id').value;
-  const shop  = document.getElementById('restock-shop').value;
-  const qty   = parseInt(document.getElementById('restock-qty').value) || 0;
-  const note  = document.getElementById('restock-note').value.trim();
+  const id  = document.getElementById('restock-id').value;
+  const qty = parseInt(document.getElementById('restock-qty').value) || 0;
+  const note = document.getElementById('restock-note').value.trim();
   if (qty <= 0) { alert('入荷数を1以上で入力してください'); return; }
   const item = inventory.find(i => i.id == id);
   if (!item) return;
-  if (!item.stocks) item.stocks = {};
   const ratio = item.conversionRatio || 1;
   const converted = Math.round(qty * ratio);
-  item.stocks[shop] = (item.stocks[shop] || 0) + converted;
+  item.stock = (item.stock || 0) + converted;
   const note2 = ratio > 1
     ? `${note ? note + ' / ' : ''}入荷${qty}個→販売単位${converted}個換算`
     : (note || '入荷');
   stockHistory.push({
     id: Date.now(), date: new Date().toISOString().slice(0,10),
-    productName: item.productName, shop, type: 'restock',
-    change: converted, after: item.stocks[shop], note: note2
+    productName: item.productName, shop: 'すべて', type: 'restock',
+    change: converted, after: item.stock, note: note2
   });
   saveInventory();
   closeRestockModal();
   renderInventory();
   const msg = ratio > 1
-    ? `✅ ${item.productName}（${shop}）\n入荷 ${qty} 個 → 販売単位 ${converted} 個 を在庫に追加しました`
-    : `✅ ${item.productName}（${shop}）に ${converted}個 入荷しました`;
+    ? `✅ ${item.productName}\n入荷 ${qty} 個 → 販売単位 ${converted} 個 を在庫に追加しました`
+    : `✅ ${item.productName} に ${converted}個 入荷しました`;
   alert(msg);
 }
 
@@ -2441,6 +2399,14 @@ function deductInventoryOnSale(productName, shop, qty) {
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
+  // 既存データマイグレーション：ショップ別在庫 → 合計在庫
+  inventory.forEach(item => {
+    if (item.stocks && item.stock === undefined) {
+      const SHOPS_ALL = ['Amazon', 'メルカリ', 'リベシティ市場', 'その他'];
+      item.stock = SHOPS_ALL.reduce((sum, sh) => sum + (item.stocks[sh] || 0), 0);
+      delete item.stocks;
+    }
+  });
   // 旧データ（その他→リベシティ市場）マイグレーション
   migrateInventoryShopKeys();
   // 4/13売上データ自動登録（1回限り）
