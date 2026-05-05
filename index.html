@@ -2237,8 +2237,21 @@ function showInvTab(tab) {
   if (tab === 'history') renderHistory();
 }
 
+// ── 商品マスター → 在庫の自動同期 ──
+function syncProductsToInventory() {
+  let changed = false;
+  products.forEach(p => {
+    if (!inventory.find(v => v.productName === p.name)) {
+      inventory.push({ id: Date.now() + Math.random(), productName: p.name, stock: 0, alertThreshold: 3, conversionRatio: 1 });
+      changed = true;
+    }
+  });
+  if (changed) saveInventory();
+}
+
 // ── 在庫一覧 ──
 function renderInventory() {
+  syncProductsToInventory();
   const alerts = [];
   inventory.forEach(item => {
     const qty = item.stock || 0;
