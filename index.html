@@ -289,32 +289,33 @@
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.4);
     z-index: 1000;
-  }
-  .modal {
-    position: fixed;
-    top: 50%;
-    left: 16px;
-    right: 16px;
-    transform: translateY(-50%);
-    max-height: 88vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 24px 16px;
+    box-sizing: border-box;
+  }
+  .modal {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    margin: auto;
+    flex-shrink: 0;
     background: white;
     border-radius: 16px;
     padding: 20px 16px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     box-sizing: border-box;
-    max-width: 520px;
-    margin: 0 auto;
-    z-index: 1001;
   }
-  body.modal-open { overflow: hidden; position: fixed; width: 100%; }
+  body.modal-open { overflow: hidden; }
   .modal h3 { font-size: 1.05rem; font-weight: 700; color: var(--orange); margin-bottom: 18px; }
   .modal .form-grid { grid-template-columns: 1fr; }
   .modal .btn-group { margin-top: 18px; justify-content: flex-end; }
   @media (min-width: 560px) {
     .modal .form-grid { grid-template-columns: 1fr 1fr; }
-    .modal { left: 50%; right: auto; transform: translate(-50%, -50%); width: calc(100% - 32px); }
   }
 
   /* Profit color */
@@ -1158,16 +1159,12 @@ function saveSales() {
 
 // ===== MODAL HELPERS =====
 function openModal(id) {
-  window._savedScrollY = window.scrollY;
-  document.body.style.top = `-${window._savedScrollY}px`;
   document.body.classList.add('modal-open');
   document.getElementById(id).style.display = 'flex';
 }
 function closeModal(id) {
   document.getElementById(id).style.display = 'none';
   document.body.classList.remove('modal-open');
-  document.body.style.top = '';
-  window.scrollTo(0, window._savedScrollY || 0);
 }
 
 // ===== TABS =====
@@ -1940,9 +1937,19 @@ function saveProduct() {
   };
   const editIndex = document.getElementById('edit-index').value;
   if (editIndex !== '') {
+    const oldName = products[parseInt(editIndex)].name;
     products[parseInt(editIndex)] = p;
+    // 商品名が変わった場合、在庫エントリの商品名も更新
+    const invEntry = inventory.find(v => v.productName === oldName);
+    if (invEntry) invEntry.productName = p.name;
   } else {
     products.push(p);
+    // 新規商品を在庫一覧に自動追加（在庫数0で登録）
+    if (!inventory.find(v => v.productName === p.name)) {
+      inventory.push({ id: Date.now(), productName: p.name, stock: 0, alertThreshold: 3, conversionRatio: 1 });
+      saveInventory();
+      renderInventory();
+    }
   }
   saveProducts();
   closeProductModal();
