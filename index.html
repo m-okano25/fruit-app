@@ -1570,15 +1570,13 @@ function saveEntry() {
   sales.push(entry);
   saveSales();
 
-  // 在庫自動連動
+  // 在庫自動連動（プラットフォームに関わらず共通在庫から減算）
   const result = deductInventoryOnSale(productName, platform, qty);
   let msg = '✅ 保存しました！';
   if (!result.found) {
     msg += `\n\n⚠️ 在庫連動なし\n「${productName}」が在庫管理に見つかりません。\n在庫管理タブの商品名と一致しているか確認してください。`;
-  } else if (result.shopMissing) {
-    msg += `\n\n⚠️ 在庫連動なし\n「${result.productName}」に「${platform}」の在庫枠がありません。\n在庫管理で編集し、${platform}の在庫を設定してください。\n（在庫あり：${result.available}）`;
   } else {
-    msg += `\n📦 在庫を自動更新しました（${platform} 残り ${result.remaining}個）`;
+    msg += `\n📦 在庫を自動更新しました（残り ${result.remaining}個）`;
     if (result.remaining <= 3) msg += `\n⚠️ 在庫が少なくなっています！`;
   }
 
@@ -2535,45 +2533,42 @@ function migrateInventoryShopKeys() {
   if (changed) saveInventory();
 }
 
-// ── 売上登録時に在庫を自動で減らす ──
+// ── 売上登録時に在庫を自動で減らす（プラットフォーム共通在庫） ──
 function deductInventoryOnSale(productName, shop, qty) {
   const normalize = s => s.trim().replace(/\s+/g, ' ');
   const normTarget = normalize(productName);
   const item = inventory.find(i => normalize(i.productName) === normTarget);
   if (!item) return { found: false };
-  if (!item.stocks) item.stocks = {};
-  // ショップキーが存在しない場合
-  if (!(shop in item.stocks)) {
-    const available = Object.keys(item.stocks).filter(k => item.stocks[k] > 0).join('、') || 'なし';
-    return { found: true, shopMissing: true, productName: item.productName, available };
-  }
-  const before = item.stocks[shop] || 0;
+  const before = item.stock || 0;
   const deduct = Math.min(qty, before);
-  item.stocks[shop] = Math.round((before - deduct) * 100) / 100;
+  item.stock = Math.round((before - deduct) * 100) / 100;
   if (deduct > 0) {
     stockHistory.push({
       id: Date.now(), date: new Date().toISOString().slice(0,10),
       productName: item.productName, shop, type: 'sale',
-      change: -deduct, after: item.stocks[shop],
+      change: -deduct, after: item.stock,
       note: '売上連動（自動）'
     });
     saveInventory();
   }
-  return { found: true, shopMissing: false, remaining: item.stocks[shop] };
+  return { found: true, shopMissing: false, remaining: item.stock };
 }
 
 // ===== INIT =====
 window.addEventListener('DOMContentLoaded', () => {
-  // 既存データマイグレーション：ショップ別在庫 → 合計在庫
+  // 既存データマイグレーション：ショップ別在庫 → 合計在庫（プラットフォーム共通在庫）
+  let invMigrChanged = false;
   inventory.forEach(item => {
-    if (item.stocks && item.stock === undefined) {
-      const SHOPS_ALL = ['Amazon', 'メルカリ', 'リベシティ市場', 'その他'];
-      item.stock = SHOPS_ALL.reduce((sum, sh) => sum + (item.stocks[sh] || 0), 0);
-      delete item.stocks;
+    if (item.stocks) {
+      if (item.stock === undefined) {
+        const SHOPS_ALL = ['Amazon', 'メルカリ', 'リベシティ市場', 'その他'];
+        item.stock = SHOPS_ALL.reduce((sum, sh) => sum + (item.stocks[sh] || 0), 0);
+      }
+      delete item.stocks; // 旧フィールドを削除
+      invMigrChanged = true;
     }
   });
-  // 旧データ（その他→リベシティ市場）マイグレーション
-  migrateInventoryShopKeys();
+  if (invMigrChanged) localStorage.setItem('fruits_inventory', JSON.stringify(inventory));
   // 4/13売上データ自動登録（1回限り）
   injectApril13Sales();
   // 配送料マスターのドロップダウンを初期化
