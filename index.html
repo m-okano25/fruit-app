@@ -1118,6 +1118,7 @@
 // ===== DATA =====
 let products = JSON.parse(localStorage.getItem('fruits_products') || '[]');
 let sales = JSON.parse(localStorage.getItem('fruits_sales') || '[]');
+let pendingSync = false; // cloudSynced=false中に保存した場合、同期完了後に再pushする
 
 // Default products
 if (products.length === 0) {
@@ -1154,7 +1155,11 @@ function saveProducts() {
 }
 function saveSales() {
   localStorage.setItem('fruits_sales', JSON.stringify(sales));
-  if (gasUrl && cloudSynced) syncToCloud();
+  if (gasUrl && cloudSynced) {
+    syncToCloud();
+  } else if (gasUrl && !cloudSynced) {
+    pendingSync = true; // 起動時クラウド取得完了後に必ず同期する
+  }
 }
 
 // ===== MODAL HELPERS =====
@@ -2600,7 +2605,11 @@ window.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
         localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
         cloudSynced = true;
+        // ローカルのみに存在していた売上(pendingSync)をクラウドに必ず書き戻す
+        syncToCloud(true);
+        pendingSync = false;
         renderDashboard(); renderMaster(); renderQuick(); populateProductSelect();
+        if (document.getElementById('tab-list').style.display !== 'none') renderList();
         setSyncStatus('success', '自動取得完了');
       })
       .catch(() => setSyncStatus('error', '取得エラー'));
@@ -2624,9 +2633,13 @@ document.addEventListener('visibilitychange', () => {
         localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
         localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
         cloudSynced = true;
+        // マージ済みの最新データをクラウドに書き戻す（ローカルのみのデータをGASに反映）
+        syncToCloud(true);
+        pendingSync = false;
         renderDashboard();
         renderMaster();
         renderQuick();
+        if (document.getElementById('tab-list').style.display !== 'none') renderList();
         setSyncStatus('success', '自動同期完了');
       })
       .catch(() => {});
