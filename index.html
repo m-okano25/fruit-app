@@ -1258,6 +1258,18 @@ async function syncToCloud(force) {
   }
 }
 
+// クラウドのsalesとローカルのsalesをIDベースでマージする（どちらにしか存在しないレコードも保持）
+function mergeSales(localSales, cloudSales) {
+  const merged = [...localSales];
+  const localIds = new Set(localSales.map(s => s.id));
+  for (const cs of cloudSales) {
+    if (!localIds.has(cs.id)) {
+      merged.push(cs);
+    }
+  }
+  return merged;
+}
+
 async function loadFromCloud() {
   if (!gasUrl) { alert('⚙️ 設定タブでApps ScriptのURLを先に登録してください。'); return; }
   if (!confirm('クラウドのデータでこのデバイスのデータを上書きします。よろしいですか？')) return;
@@ -2572,13 +2584,14 @@ window.addEventListener('DOMContentLoaded', () => {
   renderMaster();
 
   // GAS URL が設定済みなら起動時に自動取得（cloudSyncedをtrueにする）
+  // ローカルデータを失わないようにIDベースでマージする
   if (gasUrl) {
     setSyncStatus('syncing', '取得中...');
     fetch(gasUrl + '?t=' + Date.now())
       .then(r => r.json())
       .then(data => {
         if (!data.sales) return;
-        sales        = data.sales        || [];
+        sales        = mergeSales(sales, data.sales);
         products     = data.products     && data.products.length > 0     ? data.products     : products;
         inventory    = data.inventory    && data.inventory.length > 0    ? data.inventory    : inventory;
         stockHistory = data.stockHistory && data.stockHistory.length > 0 ? data.stockHistory : stockHistory;
@@ -2595,13 +2608,14 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // タブ/ウィンドウがアクティブになったとき自動でクラウドからデータ取得
+// ローカルデータを失わないようにIDベースでマージする
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && gasUrl) {
     fetch(gasUrl + '?t=' + Date.now())
       .then(r => r.json())
       .then(data => {
         if (!data.sales) return;
-        sales        = data.sales        || [];
+        sales        = mergeSales(sales, data.sales);
         products     = data.products     && data.products.length > 0 ? data.products     : products;
         inventory    = data.inventory    && data.inventory.length > 0 ? data.inventory    : inventory;
         stockHistory = data.stockHistory && data.stockHistory.length > 0 ? data.stockHistory : stockHistory;
