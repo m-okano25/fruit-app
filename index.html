@@ -495,7 +495,7 @@
   <div>
     <h1>果物売上管理アプリ</h1>
     <div class="subtitle">Amazon・メルカリ・リベシティ市場・その他 ネット販売管理</div>
-    <div id="app-version" style="font-size:0.72rem;color:rgba(255,255,255,0.82);margin-top:3px;">v2026.05.29-3</div>
+    <div id="app-version" style="font-size:0.72rem;color:rgba(255,255,255,0.82);margin-top:3px;">v2026.05.30-1</div>
   </div>
   <div class="sync-badge" id="sync-badge" title="同期ステータス">
     <div class="sync-dot" id="sync-dot"></div>
@@ -932,6 +932,7 @@
     </p>
     <div class="btn-group">
       <button class="btn btn-primary" onclick="syncToCloud(true)">☁️ クラウドへ保存</button>
+      <button class="btn btn-primary" onclick="forceSaveLocalToCloud()" style="background:#16a34a;">⬆️ この端末をクラウドへ強制保存</button>
       <button class="btn btn-secondary" onclick="loadFromCloud()">📥 データを取得・統合</button>
       <button class="btn btn-secondary" onclick="repairInventoryFromProducts()">🛠️ 商品→在庫を修復</button>
     </div>
@@ -1234,14 +1235,31 @@ function saveGasUrl() {
     .then(r => r.json())
     .then(data => {
       const count = data.sales ? data.sales.length : 0;
+      const localCount = sales.length;
       document.getElementById('gas-url-status').innerHTML =
-        `<span style="color:var(--green);">✅ 接続成功（クラウド: 売上${count}件）</span>`;
+        `<span style="color:var(--green);">✅ 接続成功（この端末: 売上${localCount}件 / クラウド: 売上${count}件）</span>`;
       setSyncStatus('success', '接続確認済み');
+      if (localCount > count) {
+        setTimeout(() => {
+          if (confirm(`この端末には売上${localCount}件、クラウドには売上${count}件あります。\nこの端末の多いデータをクラウドへ保存しますか？`)) {
+            forceSaveLocalToCloud(true);
+          }
+        }, 100);
+      }
     })
     .catch(() => {
       document.getElementById('gas-url-status').innerHTML =
         '<span style="color:var(--red);">❌ 接続できませんでした。URLを確認してください。</span>';
     });
+}
+
+async function forceSaveLocalToCloud(skipConfirm) {
+  if (!gasUrl) {
+    alert('⚙️ 設定タブでApps ScriptのURLを先に登録してください。');
+    return;
+  }
+  if (!skipConfirm && !confirm(`この端末のデータをクラウドへ保存します。\n売上 ${sales.length}件 / 商品 ${products.length}件 / 在庫 ${inventory.length}件\nよろしいですか？`)) return;
+  await syncToCloud(true, true);
 }
 
 function clearGasUrl() {
@@ -1254,7 +1272,7 @@ function clearGasUrl() {
   renderSettingsStatus();
 }
 
-async function syncToCloud(force) {
+async function syncToCloud(force, showAlert) {
   if (!gasUrl) return;
   if (!force && !cloudSynced) return;
   setSyncStatus('syncing', '同期中...');
@@ -1268,16 +1286,18 @@ async function syncToCloud(force) {
     const json = await res.json();
     if (json.success) {
       const now = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-      setSyncStatus('success', '同期済 ' + now);
+      setSyncStatus('success', `同期済 ${now} / 売上${sales.length}件`);
       const st = document.getElementById('gas-url-status');
-      if (st) st.innerHTML = '<span style="color:var(--green);">✅ クラウドへの保存に成功しました。</span>';
+      if (st) st.innerHTML = `<span style="color:var(--green);">✅ クラウドへの保存に成功しました（売上${sales.length}件）</span>`;
+      if (showAlert) alert(`✅ クラウドへ保存しました（売上${sales.length}件）`);
     } else {
-      throw new Error('保存失敗');
+      throw new Error(json.reason || '保存失敗');
     }
   } catch(e) {
     setSyncStatus('error', '同期エラー');
     const st = document.getElementById('gas-url-status');
-    if (st) st.innerHTML = '<span style="color:var(--red);">❌ 同期に失敗しました。URLとネット接続を確認してください。</span>';
+    if (st) st.innerHTML = `<span style="color:var(--red);">❌ 同期に失敗しました。${e.message || 'URLとネット接続を確認してください。'}</span>`;
+    if (showAlert) alert(`❌ 同期に失敗しました。\n${e.message || ''}`);
   }
 }
 
