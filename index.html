@@ -1132,12 +1132,24 @@ if (products.length === 0) {
 
 // 商品名から基本名を抽出（×N部分を除去）
 function getBaseProductName(name) {
-  return name.replace(/\s*×\s*\d+[箱個玉]*/gi, '').trim();
+  return String(name || '')
+    .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/[✕×xX]\s*\d+[箱個玉ケースkgKG㎏]*/gi, '')
+    .trim();
 }
 // 商品名から箱数倍率を取得
 function getBoxMultiplier(name) {
-  const m = name.match(/×\s*(\d+)/);
+  const normalized = String(name || '').replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+  const m = normalized.match(/[✕×xX]\s*(\d+)/);
   return m ? parseInt(m[1]) : 1;
+}
+
+function normalizeProductName(name) {
+  return getBaseProductName(name)
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/\s+/g, '')
+    .replace(/[（）()【】\[\]・･]/g, '')
+    .toLowerCase();
 }
 
 let currentPeriod = 'thisMonth';
@@ -1151,7 +1163,11 @@ function saveShippingRates() { localStorage.setItem('fruits_shippingRates', JSON
 
 function saveProducts() {
   localStorage.setItem('fruits_products', JSON.stringify(products));
-  if (gasUrl && cloudSynced) syncToCloud();
+  if (gasUrl && cloudSynced) {
+    syncToCloud();
+  } else if (gasUrl && !cloudSynced) {
+    pendingSync = true;
+  }
 }
 function saveSales() {
   localStorage.setItem('fruits_sales', JSON.stringify(sales));
@@ -1275,6 +1291,35 @@ function mergeSales(localSales, cloudSales) {
   return merged;
 }
 
+function mergeByKey(localItems, cloudItems, keyFn) {
+  const map = new Map();
+  (cloudItems || []).forEach(item => map.set(keyFn(item), item));
+  (localItems || []).forEach(item => {
+    const key = keyFn(item);
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, item);
+      return;
+    }
+    const localUpdated = item.updatedAt || 0;
+    const cloudUpdated = existing.updatedAt || 0;
+    map.set(key, localUpdated >= cloudUpdated ? { ...existing, ...item } : { ...item, ...existing });
+  });
+  return [...map.values()];
+}
+
+function mergeProducts(localProducts, cloudProducts) {
+  return mergeByKey(localProducts, cloudProducts, p => normalizeProductName(p.name));
+}
+
+function mergeInventory(localInventory, cloudInventory) {
+  return mergeByKey(localInventory, cloudInventory, i => normalizeProductName(i.productName));
+}
+
+function mergeStockHistory(localHistory, cloudHistory) {
+  return mergeByKey(localHistory, cloudHistory, h => String(h.id));
+}
+
 async function loadFromCloud() {
   if (!gasUrl) { alert('⚙️ 設定タブでApps ScriptのURLを先に登録してください。'); return; }
   if (!confirm('クラウドのデータでこのデバイスのデータを上書きします。よろしいですか？')) return;
@@ -1283,15 +1328,16 @@ async function loadFromCloud() {
     const res = await fetch(gasUrl + '?t=' + Date.now());
     const data = await res.json();
     if (data.sales !== undefined) {
-      sales        = data.sales || [];
-      products     = data.products     && data.products.length > 0     ? data.products     : products;
-      inventory    = data.inventory    && data.inventory.length > 0    ? data.inventory    : inventory;
-      stockHistory = data.stockHistory && data.stockHistory.length > 0 ? data.stockHistory : stockHistory;
+      sales        = mergeSales(sales, data.sales || []);
+      products     = mergeProducts(products, data.products || []);
+      inventory    = mergeInventory(inventory, data.inventory || []);
+      stockHistory = mergeStockHistory(stockHistory, data.stockHistory || []);
       localStorage.setItem('fruits_sales',        JSON.stringify(sales));
       localStorage.setItem('fruits_products',     JSON.stringify(products));
       localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
       localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
       cloudSynced = true;
+      syncProductsToInventory();
       populateProductSelect();
       renderDashboard();
       renderList();
@@ -1941,6 +1987,7 @@ function closeProductModal(e) {
 function saveProduct() {
   const name = document.getElementById('m-name').value.trim();
   if (!name) { alert('商品名を入力してください'); return; }
+  const now = Date.now();
   const p = {
     name,
     cost: parseFloat(document.getElementById('m-cost').value) || 0,
@@ -1949,19 +1996,24 @@ function saveProduct() {
     priceAmazon: parseFloat(document.getElementById('m-price-amazon').value) || 0,
     priceMercari: parseFloat(document.getElementById('m-price-mercari').value) || 0,
     priceLibecity: parseFloat(document.getElementById('m-price-libecity').value) || 0,
+    updatedAt: now,
   };
   const editIndex = document.getElementById('edit-index').value;
   if (editIndex !== '') {
     const oldName = products[parseInt(editIndex)].name;
     products[parseInt(editIndex)] = p;
     // 商品名が変わった場合、在庫エントリの商品名も更新
-    const invEntry = inventory.find(v => v.productName === oldName);
-    if (invEntry) invEntry.productName = p.name;
+    const invEntry = inventory.find(v => normalizeProductName(v.productName) === normalizeProductName(oldName));
+    if (invEntry) {
+      invEntry.productName = p.name;
+      invEntry.updatedAt = now;
+      saveInventory();
+    }
   } else {
     products.push(p);
     // 新規商品を在庫一覧に自動追加（在庫数0で登録）
-    if (!inventory.find(v => v.productName === p.name)) {
-      inventory.push({ id: Date.now(), productName: p.name, stock: 0, alertThreshold: 3, conversionRatio: 1 });
+    if (!inventory.find(v => normalizeProductName(v.productName) === normalizeProductName(p.name))) {
+      inventory.push({ id: now, productName: p.name, stock: 0, alertThreshold: 3, conversionRatio: 1, updatedAt: now });
       saveInventory();
       renderInventory();
     }
@@ -2026,17 +2078,8 @@ function quickSale(productIndex, platform, btnKey) {
   sales.push({ id: Date.now(), date: dateStr, product: p.name, platform, price, cost: p.cost, shipping: p.shipping, packing: p.packing, feeRate, fee, qty: 1, totalRevenue, totalCost, profit, profitRate });
   localStorage.setItem('fruits_sales', JSON.stringify(sales));
 
-  // 在庫をdeductQty減らす（グローバル変数を更新）
-  const baseName = getBaseProductName(p.name);
-  const inv = inventory.find(v => v.productName === baseName) || inventory.find(v => v.productName === p.name);
-  if (inv) {
-    inv.stock = Math.max(0, (inv.stock || 0) - deductQty);
-  }
-  localStorage.setItem('fruits_inventory', JSON.stringify(inventory));
-
-  // 入出荷履歴（グローバル変数を更新）
-  stockHistory.unshift({ id: Date.now()+1, type: 'sale', productName: p.name, shop: platform, quantity: -deductQty, date: dateStr, note: `クイック売上${isDouble ? '（×2箱）' : ''}` });
-  localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
+  // 在庫をdeductQty減らす（通常入力と同じ共通ロジックを使う）
+  deductInventoryOnSale(p.name, platform, 1);
 
   // 全データをまとめてクラウド同期
   if (gasUrl) syncToCloud();
@@ -2235,7 +2278,11 @@ let stockHistory = JSON.parse(localStorage.getItem('fruits_stockHistory') || '[]
 function saveInventory() {
   localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
   localStorage.setItem('fruits_stockHistory', JSON.stringify(stockHistory));
-  if (gasUrl && cloudSynced) syncToCloud();
+  if (gasUrl && cloudSynced) {
+    syncToCloud();
+  } else if (gasUrl && !cloudSynced) {
+    pendingSync = true;
+  }
 }
 
 function getShopChip(shop) {
@@ -2256,8 +2303,8 @@ function showInvTab(tab) {
 function syncProductsToInventory() {
   let changed = false;
   products.forEach(p => {
-    if (!inventory.find(v => v.productName === p.name)) {
-      inventory.push({ id: Date.now() + Math.random(), productName: p.name, stock: 0, alertThreshold: 3, conversionRatio: 1 });
+    if (!inventory.find(v => normalizeProductName(v.productName) === normalizeProductName(p.name))) {
+      inventory.push({ id: Date.now() + Math.random(), productName: p.name, stock: 0, alertThreshold: 3, conversionRatio: 1, updatedAt: Date.now() });
       changed = true;
     }
   });
@@ -2328,8 +2375,9 @@ function adjustStock(id, delta) {
   if (!item) return;
   const before = item.stock || 0;
   item.stock = Math.max(0, before + delta);
+  item.updatedAt = Date.now();
   stockHistory.push({
-    id: Date.now(), date: new Date().toISOString().slice(0,10),
+    id: Date.now() + Math.random(), date: new Date().toISOString().slice(0,10),
     productName: item.productName, shop: 'すべて',
     type: 'adjustment',
     change: item.stock - before,
@@ -2384,9 +2432,9 @@ function saveInventoryItem() {
   const conversionRatio = parseFloat(document.getElementById('inv-conversion').value) || 1;
   if (editId) {
     const item = inventory.find(i => i.id == editId);
-    if (item) { item.productName = name; item.stock = stock; item.alertThreshold = threshold; item.conversionRatio = conversionRatio; }
+    if (item) { item.productName = name; item.stock = stock; item.alertThreshold = threshold; item.conversionRatio = conversionRatio; item.updatedAt = Date.now(); }
   } else {
-    inventory.push({ id: Date.now(), productName: name, stock, alertThreshold: threshold, conversionRatio });
+    inventory.push({ id: Date.now(), productName: name, stock, alertThreshold: threshold, conversionRatio, updatedAt: Date.now() });
     if (stock > 0) {
       stockHistory.push({
         id: Date.now() + Math.random(),
@@ -2447,11 +2495,12 @@ function saveRestock() {
   const ratio = item.conversionRatio || 1;
   const converted = Math.round(qty * ratio);
   item.stock = (item.stock || 0) + converted;
+  item.updatedAt = Date.now();
   const note2 = ratio > 1
     ? `${note ? note + ' / ' : ''}入荷${qty}個→販売単位${converted}個換算`
     : (note || '入荷');
   stockHistory.push({
-    id: Date.now(), date: new Date().toISOString().slice(0,10),
+    id: Date.now() + Math.random(), date: new Date().toISOString().slice(0,10),
     productName: item.productName, shop: 'すべて', type: 'restock',
     change: converted, after: item.stock, note: note2
   });
@@ -2535,22 +2584,26 @@ function migrateInventoryShopKeys() {
 
 // ── 売上登録時に在庫を自動で減らす（プラットフォーム共通在庫） ──
 function deductInventoryOnSale(productName, shop, qty) {
-  const normalize = s => s.trim().replace(/\s+/g, ' ');
-  const normTarget = normalize(productName);
-  const item = inventory.find(i => normalize(i.productName) === normTarget);
+  syncProductsToInventory();
+  const normTarget = normalizeProductName(productName);
+  const baseTarget = normalizeProductName(getBaseProductName(productName));
+  const item = inventory.find(i => normalizeProductName(i.productName) === baseTarget)
+            || inventory.find(i => normalizeProductName(i.productName) === normTarget);
   if (!item) return { found: false };
   const before = item.stock || 0;
-  const deduct = Math.min(qty, before);
+  const deductRequest = (parseFloat(qty) || 1) * getBoxMultiplier(productName);
+  const deduct = Math.min(deductRequest, before);
   item.stock = Math.round((before - deduct) * 100) / 100;
-  if (deduct > 0) {
-    stockHistory.push({
-      id: Date.now(), date: new Date().toISOString().slice(0,10),
-      productName: item.productName, shop, type: 'sale',
-      change: -deduct, after: item.stock,
-      note: '売上連動（自動）'
-    });
-    saveInventory();
-  }
+  item.updatedAt = Date.now();
+  stockHistory.push({
+    id: Date.now() + Math.random(), date: new Date().toISOString().slice(0,10),
+    productName: item.productName, shop, type: 'sale',
+    change: -deduct, after: item.stock,
+    note: deduct < deductRequest
+      ? `売上連動（在庫不足: ${deductRequest}個分のうち${deduct}個のみ減算）`
+      : `売上連動（自動${deductRequest > 1 ? ` / ${deductRequest}個分` : ''}）`
+  });
+  saveInventory();
   return { found: true, shopMissing: false, remaining: item.stock };
 }
 
@@ -2592,9 +2645,10 @@ window.addEventListener('DOMContentLoaded', () => {
       .then(data => {
         if (!data.sales) return;
         sales        = mergeSales(sales, data.sales);
-        products     = data.products     && data.products.length > 0     ? data.products     : products;
-        inventory    = data.inventory    && data.inventory.length > 0    ? data.inventory    : inventory;
-        stockHistory = data.stockHistory && data.stockHistory.length > 0 ? data.stockHistory : stockHistory;
+        products     = mergeProducts(products, data.products || []);
+        inventory    = mergeInventory(inventory, data.inventory || []);
+        stockHistory = mergeStockHistory(stockHistory, data.stockHistory || []);
+        syncProductsToInventory();
         localStorage.setItem('fruits_sales',        JSON.stringify(sales));
         localStorage.setItem('fruits_products',     JSON.stringify(products));
         localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
@@ -2620,9 +2674,10 @@ document.addEventListener('visibilitychange', () => {
       .then(data => {
         if (!data.sales) return;
         sales        = mergeSales(sales, data.sales);
-        products     = data.products     && data.products.length > 0 ? data.products     : products;
-        inventory    = data.inventory    && data.inventory.length > 0 ? data.inventory    : inventory;
-        stockHistory = data.stockHistory && data.stockHistory.length > 0 ? data.stockHistory : stockHistory;
+        products     = mergeProducts(products, data.products || []);
+        inventory    = mergeInventory(inventory, data.inventory || []);
+        stockHistory = mergeStockHistory(stockHistory, data.stockHistory || []);
+        syncProductsToInventory();
         localStorage.setItem('fruits_sales',        JSON.stringify(sales));
         localStorage.setItem('fruits_products',     JSON.stringify(products));
         localStorage.setItem('fruits_inventory',    JSON.stringify(inventory));
