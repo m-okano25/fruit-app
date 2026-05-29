@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fruit-app-api",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-05-29",
+  "preview_urls": false,
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fruit-sales-db",
+      "database_id": "5f4254f2-aaca-4aa4-9138-2cafa8218af2"
+    }
+  ]
+}

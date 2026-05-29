@@ -495,7 +495,7 @@
   <div>
     <h1>果物売上管理アプリ</h1>
     <div class="subtitle">Amazon・メルカリ・リベシティ市場・その他 ネット販売管理</div>
-    <div id="app-version" style="font-size:0.72rem;color:rgba(255,255,255,0.82);margin-top:3px;">v2026.05.30-2</div>
+    <div id="app-version" style="font-size:0.72rem;color:rgba(255,255,255,0.82);margin-top:3px;">v2026.05.30-3</div>
   </div>
   <div class="sync-badge" id="sync-badge" title="同期ステータス">
     <div class="sync-dot" id="sync-dot"></div>
@@ -912,11 +912,12 @@
       <div class="setup-step">
         <div class="step-num">4</div>
         <div class="step-body">
-          <strong>発行されたURLを以下に貼り付ける</strong>
-          <p>「ウェブアプリのURL」をコピーして、以下に貼り付けて「保存して接続」を押してください。</p>
+          <strong>同期URLを以下に貼り付ける</strong>
+          <p>Google Apps Script または Cloudflare D1 の同期URLを貼り付けて「保存して接続」を押してください。</p>
           <div class="url-input-wrap">
-            <input type="url" id="gas-url-input" class="form-group input" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;" placeholder="https://script.google.com/macros/s/...">
+            <input type="url" id="gas-url-input" class="form-group input" style="padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;" placeholder="https://script.google.com/macros/s/... または https://fruit-app-api...">
             <button class="btn btn-primary" onclick="saveGasUrl()">保存して接続</button>
+            <button class="btn btn-secondary" onclick="useD1SyncUrl()">D1専用DBに切り替え</button>
             <button class="btn btn-secondary" onclick="clearGasUrl()">接続解除</button>
           </div>
           <div id="gas-url-status" style="margin-top:10px;font-size:0.82rem;"></div>
@@ -1161,6 +1162,7 @@ let filteredSales = [];
 let chartProduct = null, chartMonthly = null;
 var gasUrl       = localStorage.getItem('fruits_gasUrl') || '';
 var cloudSynced  = false; // GASからデータ取得済みフラグ（未取得時はプッシュしない）
+const D1_SYNC_URL = 'https://fruit-app-api.hrs-m-825.workers.dev/';
 let shippingRates = JSON.parse(localStorage.getItem('fruits_shippingRates') || '[]');
 function saveShippingRates() { localStorage.setItem('fruits_shippingRates', JSON.stringify(shippingRates)); }
 
@@ -1221,9 +1223,9 @@ function setSyncStatus(state, text) {
 
 function saveGasUrl() {
   const input = document.getElementById('gas-url-input').value.trim();
-  if (!input.startsWith('https://script.google.com')) {
+  if (!input.startsWith('https://script.google.com') && !input.startsWith('https://fruit-app-api.')) {
     document.getElementById('gas-url-status').innerHTML =
-      '<span style="color:var(--red);">❌ URLが正しくありません。Apps ScriptのURLを入力してください。</span>';
+      '<span style="color:var(--red);">❌ URLが正しくありません。Apps ScriptまたはD1専用DBのURLを入力してください。</span>';
     return;
   }
   gasUrl = input;
@@ -1251,6 +1253,11 @@ function saveGasUrl() {
       document.getElementById('gas-url-status').innerHTML =
         '<span style="color:var(--red);">❌ 接続できませんでした。URLを確認してください。</span>';
     });
+}
+
+function useD1SyncUrl() {
+  document.getElementById('gas-url-input').value = D1_SYNC_URL;
+  saveGasUrl();
 }
 
 async function forceSaveLocalToCloud(skipConfirm) {

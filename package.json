@@ -1,0 +1,12 @@
+{
+  "name": "fruit-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "d1:schema": "wrangler d1 execute fruit-sales-db --file=./db/schema.sql --remote"
+  },
+  "devDependencies": {
+    "wrangler": "^4.84.1"
+  }
+}
