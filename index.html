@@ -495,6 +495,7 @@
   <div>
     <h1>果物売上管理アプリ</h1>
     <div class="subtitle">Amazon・メルカリ・リベシティ市場・その他 ネット販売管理</div>
+    <div id="app-version" style="font-size:0.72rem;color:rgba(255,255,255,0.82);margin-top:3px;">v2026.05.29-3</div>
   </div>
   <div class="sync-badge" id="sync-badge" title="同期ステータス">
     <div class="sync-dot" id="sync-dot"></div>
@@ -931,10 +932,11 @@
     </p>
     <div class="btn-group">
       <button class="btn btn-primary" onclick="syncToCloud(true)">☁️ クラウドへ保存</button>
-      <button class="btn btn-secondary" onclick="loadFromCloud()">📥 データを取得（上書き）</button>
+      <button class="btn btn-secondary" onclick="loadFromCloud()">📥 データを取得・統合</button>
+      <button class="btn btn-secondary" onclick="repairInventoryFromProducts()">🛠️ 商品→在庫を修復</button>
     </div>
     <p style="font-size:0.78rem;color:var(--text-muted);margin-top:10px;">
-      ※「データを取得」を実行すると、このデバイスのデータがクラウドのデータで上書きされます。
+      ※「データを取得・統合」は、この端末とクラウドのデータを合わせて残します。
     </p>
   </div>
 
@@ -1322,7 +1324,7 @@ function mergeStockHistory(localHistory, cloudHistory) {
 
 async function loadFromCloud() {
   if (!gasUrl) { alert('⚙️ 設定タブでApps ScriptのURLを先に登録してください。'); return; }
-  if (!confirm('クラウドのデータでこのデバイスのデータを上書きします。よろしいですか？')) return;
+  if (!confirm('クラウドのデータとこの端末のデータを統合します。よろしいですか？')) return;
   setSyncStatus('syncing', '取得中...');
   try {
     const res = await fetch(gasUrl + '?t=' + Date.now());
@@ -1342,6 +1344,8 @@ async function loadFromCloud() {
       renderDashboard();
       renderList();
       renderMaster();
+      renderQuick();
+      if (document.getElementById('tab-inventory').style.display !== 'none') renderInventory();
       const now = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
       setSyncStatus('success', '取得済 ' + now);
       alert('✅ クラウドからデータを取得しました（売上 ' + sales.length + '件）');
@@ -2001,26 +2005,31 @@ function saveProduct() {
   const editIndex = document.getElementById('edit-index').value;
   if (editIndex !== '') {
     const oldName = products[parseInt(editIndex)].name;
+    const oldBaseName = getBaseProductName(oldName);
     products[parseInt(editIndex)] = p;
     // 商品名が変わった場合、在庫エントリの商品名も更新
-    const invEntry = inventory.find(v => normalizeProductName(v.productName) === normalizeProductName(oldName));
+    const invEntry = inventory.find(v => normalizeProductName(v.productName) === normalizeProductName(oldBaseName))
+                  || inventory.find(v => normalizeProductName(v.productName) === normalizeProductName(oldName));
     if (invEntry) {
-      invEntry.productName = p.name;
+      invEntry.productName = getBaseProductName(p.name);
       invEntry.updatedAt = now;
       saveInventory();
     }
   } else {
     products.push(p);
+    const baseName = getBaseProductName(p.name);
     // 新規商品を在庫一覧に自動追加（在庫数0で登録）
-    if (!inventory.find(v => normalizeProductName(v.productName) === normalizeProductName(p.name))) {
-      inventory.push({ id: now, productName: p.name, stock: 0, alertThreshold: 3, conversionRatio: 1, updatedAt: now });
+    if (!inventory.find(v => normalizeProductName(v.productName) === normalizeProductName(baseName))) {
+      inventory.push({ id: now, productName: baseName, stock: 0, alertThreshold: 3, conversionRatio: 1, updatedAt: now });
       saveInventory();
-      renderInventory();
     }
   }
+  syncProductsToInventory();
   saveProducts();
   closeProductModal();
   renderMaster();
+  renderQuick();
+  renderInventory();
   populateProductSelect();
 }
 
@@ -2303,12 +2312,22 @@ function showInvTab(tab) {
 function syncProductsToInventory() {
   let changed = false;
   products.forEach(p => {
-    if (!inventory.find(v => normalizeProductName(v.productName) === normalizeProductName(p.name))) {
-      inventory.push({ id: Date.now() + Math.random(), productName: p.name, stock: 0, alertThreshold: 3, conversionRatio: 1, updatedAt: Date.now() });
+    const baseName = getBaseProductName(p.name);
+    if (!inventory.find(v => normalizeProductName(v.productName) === normalizeProductName(baseName))) {
+      inventory.push({ id: Date.now() + Math.random(), productName: baseName, stock: 0, alertThreshold: 3, conversionRatio: 1, updatedAt: Date.now() });
       changed = true;
     }
   });
   if (changed) saveInventory();
+}
+
+function repairInventoryFromProducts() {
+  syncProductsToInventory();
+  localStorage.setItem('fruits_inventory', JSON.stringify(inventory));
+  renderInventory();
+  renderQuick();
+  if (gasUrl && cloudSynced) syncToCloud(true);
+  alert('✅ 商品マスターの商品を在庫一覧へ反映しました（在庫数は0で追加されます）');
 }
 
 // ── 在庫一覧 ──
@@ -2622,6 +2641,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
   if (invMigrChanged) localStorage.setItem('fruits_inventory', JSON.stringify(inventory));
+  syncProductsToInventory();
   // 4/13売上データ自動登録（1回限り）
   injectApril13Sales();
   // 配送料マスターのドロップダウンを初期化
@@ -2635,6 +2655,7 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('in-date').value = new Date().toISOString().slice(0, 10);
   renderDashboard();
   renderMaster();
+  renderQuick();
 
   // GAS URL が設定済みなら起動時に自動取得（cloudSyncedをtrueにする）
   // ローカルデータを失わないようにIDベースでマージする
@@ -2659,6 +2680,7 @@ window.addEventListener('DOMContentLoaded', () => {
         pendingSync = false;
         renderDashboard(); renderMaster(); renderQuick(); populateProductSelect();
         if (document.getElementById('tab-list').style.display !== 'none') renderList();
+        if (document.getElementById('tab-inventory').style.display !== 'none') renderInventory();
         setSyncStatus('success', '自動取得完了');
       })
       .catch(() => setSyncStatus('error', '取得エラー'));
@@ -2689,7 +2711,9 @@ document.addEventListener('visibilitychange', () => {
         renderDashboard();
         renderMaster();
         renderQuick();
+        populateProductSelect();
         if (document.getElementById('tab-list').style.display !== 'none') renderList();
+        if (document.getElementById('tab-inventory').style.display !== 'none') renderInventory();
         setSyncStatus('success', '自動同期完了');
       })
       .catch(() => {});
