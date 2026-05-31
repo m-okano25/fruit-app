@@ -495,7 +495,7 @@
   <div>
     <h1>果物売上管理アプリ</h1>
     <div class="subtitle">Amazon・メルカリ・リベシティ市場・その他 ネット販売管理</div>
-    <div id="app-version" style="font-size:0.72rem;color:rgba(255,255,255,0.82);margin-top:3px;">v2026.06.01-1</div>
+    <div id="app-version" style="font-size:0.72rem;color:rgba(255,255,255,0.82);margin-top:3px;">v2026.06.01-2</div>
   </div>
   <div class="sync-badge" id="sync-badge" title="同期ステータス">
     <div class="sync-dot" id="sync-dot"></div>
@@ -1175,6 +1175,7 @@ function saveProducts() {
   }
 }
 function saveSales() {
+  sales = normalizeSales(sales);
   localStorage.setItem('fruits_sales', JSON.stringify(sales));
   if (gasUrl && cloudSynced) {
     syncToCloud();
@@ -1309,6 +1310,8 @@ async function syncToCloud(force, showAlert) {
   if (!force && !cloudSynced) return;
   setSyncStatus('syncing', '同期中...');
   try {
+    sales = normalizeSales(sales);
+    localStorage.setItem('fruits_sales', JSON.stringify(sales));
     const payload = JSON.stringify({ sales, products, inventory, stockHistory });
     const res = await fetch(gasUrl, {
       method: 'POST',
@@ -1345,16 +1348,45 @@ async function syncToCloud(force, showAlert) {
   }
 }
 
-// クラウドのsalesとローカルのsalesをIDベースでマージする（どちらにしか存在しないレコードも保持）
+function normalizeSale(sale) {
+  const price = parseFloat(sale.price) || 0;
+  const cost = parseFloat(sale.cost) || 0;
+  const shipping = parseFloat(sale.shipping) || 0;
+  const packing = parseFloat(sale.packing) || 0;
+  const feeRate = parseFloat(sale.feeRate) || 0;
+  const qty = parseFloat(sale.qty) || 1;
+  const fee = price * (feeRate / 100);
+  const totalRevenue = price * qty;
+  const totalCost = (cost + packing + fee) * qty + shipping;
+  const profit = totalRevenue - totalCost;
+  const profitRate = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+  return {
+    ...sale,
+    price, cost, shipping, packing, feeRate, fee, qty,
+    totalRevenue, totalCost, profit, profitRate
+  };
+}
+
+function normalizeSales(list) {
+  return (list || []).map(normalizeSale);
+}
+
+// クラウドのsalesとローカルのsalesをIDベースでマージする（同じIDは更新日時が新しい方を採用）
 function mergeSales(localSales, cloudSales) {
-  const merged = [...localSales];
-  const localIds = new Set(localSales.map(s => s.id));
-  for (const cs of cloudSales) {
-    if (!localIds.has(cs.id)) {
-      merged.push(cs);
+  const map = new Map();
+  normalizeSales(cloudSales).forEach(item => map.set(String(item.id), item));
+  normalizeSales(localSales).forEach(item => {
+    const key = String(item.id);
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, item);
+      return;
     }
-  }
-  return merged;
+    const localUpdated = item.updatedAt || 0;
+    const cloudUpdated = existing.updatedAt || 0;
+    map.set(key, localUpdated > cloudUpdated ? item : existing);
+  });
+  return [...map.values()];
 }
 
 function mergeByKey(localItems, cloudItems, keyFn) {
@@ -1678,7 +1710,8 @@ function saveEntry() {
     product: productName,
     platform,
     price, cost, shipping, packing, feeRate, fee, qty,
-    totalRevenue, totalCost, profit, profitRate
+    totalRevenue, totalCost, profit, profitRate,
+    updatedAt: Date.now()
   };
 
   sales.push(entry);
@@ -1902,7 +1935,8 @@ function saveEditEntry() {
     product: document.getElementById('ee-product').value.trim() || sales[idx].product,
     platform: document.getElementById('ee-platform').value,
     price, cost, shipping, packing, feeRate, fee, qty,
-    totalRevenue, totalCost, profit, profitRate
+    totalRevenue, totalCost, profit, profitRate,
+    updatedAt: Date.now()
   };
   saveSales();
   closeEditEntryModal();
@@ -2148,7 +2182,7 @@ function quickSale(productIndex, platform, btnKey) {
   const profitRate = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
 
   // 売上記録
-  sales.push({ id: Date.now(), date: dateStr, product: p.name, platform, price, cost: p.cost, shipping: p.shipping, packing: p.packing, feeRate, fee, qty: 1, totalRevenue, totalCost, profit, profitRate });
+  sales.push({ id: Date.now(), date: dateStr, product: p.name, platform, price, cost: p.cost, shipping: p.shipping, packing: p.packing, feeRate, fee, qty: 1, totalRevenue, totalCost, profit, profitRate, updatedAt: Date.now() });
   saveSales();
 
   // 在庫をdeductQty減らす（通常入力と同じ共通ロジックを使う）
@@ -2175,6 +2209,7 @@ function deleteProduct(index) {
 
 // ===== DASHBOARD =====
 function renderDashboard() {
+  sales = normalizeSales(sales);
   const data = filterByPeriod(sales);
 
   // ── 1. サマリー統計 ──
