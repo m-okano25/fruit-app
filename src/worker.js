@@ -16,6 +16,15 @@ function normalizeKey(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function canonicalProductKey(value) {
+  return String(value || "")
+    .replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/[✕×xX]\s*\d+[箱個玉ケースkgKG㎏]*/gi, "")
+    .replace(/\s+/g, "")
+    .replace(/[（）()【】\[\]・･]/g, "")
+    .toLowerCase();
+}
+
 function saleId(sale) {
   return String(sale?.id || `${sale?.date || ""}-${sale?.productName || ""}-${sale?.platform || ""}-${sale?.price || ""}-${Math.random()}`);
 }
@@ -38,14 +47,24 @@ async function readTable(db, tableName) {
 }
 
 async function getAllData(db) {
-  const [sales, products, inventory, stockHistory] = await Promise.all([
+  const [sales, products, inventory, stockHistory, deletedProductsRow, deletedInventoryRow] = await Promise.all([
     readTable(db, "sales"),
     readTable(db, "products"),
     readTable(db, "inventory"),
     readTable(db, "stock_history"),
+    db.prepare("SELECT value FROM sync_meta WHERE key = 'deleted_product_keys'").first(),
+    db.prepare("SELECT value FROM sync_meta WHERE key = 'deleted_inventory_keys'").first(),
   ]);
 
-  return { sales, products, inventory, stockHistory };
+  const parseKeys = (row) => {
+    try { return JSON.parse(row?.value || "[]"); } catch { return []; }
+  };
+  return {
+    sales, products, inventory, stockHistory,
+    deletedProductKeys: parseKeys(deletedProductsRow),
+    deletedInventoryKeys: parseKeys(deletedInventoryRow),
+    syncVersion: 2,
+  };
 }
 
 async function replaceTable(db, tableName, keyColumn, rows) {
@@ -76,9 +95,27 @@ async function replaceKeyedTable(db, tableName, keyColumn, rows) {
 
 async function saveAllData(db, data) {
   const sales = Array.isArray(data.sales) ? data.sales : [];
-  const products = Array.isArray(data.products) ? data.products : [];
-  const inventory = Array.isArray(data.inventory) ? data.inventory : [];
+  let products = Array.isArray(data.products) ? data.products : [];
+  let inventory = Array.isArray(data.inventory) ? data.inventory : [];
   const stockHistory = Array.isArray(data.stockHistory) ? data.stockHistory : [];
+
+  // v2端末は削除一覧を正式データとして更新。旧端末はサーバーの削除情報を維持する。
+  const [storedProductDeletes, storedInventoryDeletes] = await Promise.all([
+    db.prepare("SELECT value FROM sync_meta WHERE key = 'deleted_product_keys'").first(),
+    db.prepare("SELECT value FROM sync_meta WHERE key = 'deleted_inventory_keys'").first(),
+  ]);
+  const parseKeys = (row) => {
+    try { return JSON.parse(row?.value || "[]"); } catch { return []; }
+  };
+  const isV2 = Number(data.syncVersion) >= 2;
+  const deletedProductKeys = isV2 && Array.isArray(data.deletedProductKeys)
+    ? data.deletedProductKeys : parseKeys(storedProductDeletes);
+  const deletedInventoryKeys = isV2 && Array.isArray(data.deletedInventoryKeys)
+    ? data.deletedInventoryKeys : parseKeys(storedInventoryDeletes);
+  const deletedProducts = new Set(deletedProductKeys);
+  const deletedInventory = new Set(deletedInventoryKeys);
+  products = products.filter((item) => !deletedProducts.has(canonicalProductKey(item?.name || item?.productName)));
+  inventory = inventory.filter((item) => !deletedInventory.has(canonicalProductKey(item?.productName || item?.name)));
 
   const current = await db.prepare("SELECT COUNT(*) AS count FROM sales").first();
   const currentSalesCount = current?.count || 0;
@@ -101,6 +138,12 @@ async function saveAllData(db, data) {
     db.prepare(
       "INSERT OR REPLACE INTO sync_meta (key, value, updated_at) VALUES ('last_sync', ?, datetime('now'))"
     ).bind(new Date().toISOString()),
+    db.prepare(
+      "INSERT OR REPLACE INTO sync_meta (key, value, updated_at) VALUES ('deleted_product_keys', ?, datetime('now'))"
+    ).bind(JSON.stringify(deletedProductKeys)),
+    db.prepare(
+      "INSERT OR REPLACE INTO sync_meta (key, value, updated_at) VALUES ('deleted_inventory_keys', ?, datetime('now'))"
+    ).bind(JSON.stringify(deletedInventoryKeys)),
   ];
 
   await db.batch(statements);
@@ -111,6 +154,8 @@ async function saveAllData(db, data) {
     savedProducts: products.length,
     savedInventory: inventory.length,
     savedStockHistory: stockHistory.length,
+    deletedProductKeys,
+    deletedInventoryKeys,
     timestamp: new Date().toISOString(),
   };
 }
